@@ -1,0 +1,7 @@
+--%%file:utils.lua,utils
+--%%file:parser.lua,parser
+--%%file:compiler.lua,compiler
+--%%file:props.lua,props
+--%%file:rule.lua,rule
+--%%file:builtins.lua,builtin
+--%%file:sim.lua,sim

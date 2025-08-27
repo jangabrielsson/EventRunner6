@@ -1,0 +1,814 @@
+fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
+local ER = fibaro.EventRunner
+local debugFlags = ER.debugFlags
+
+local fmt = string.format
+
+local FUNCSTR = "funct".."ion"
+
+local function docify(c)
+  if type(c) ~= 'table' then return c end
+  if c.__doc then 
+    return docify(c.__doc)
+  else
+    local r = {}
+    for k,v in pairs(c) do r[k] = docify(v) end
+    return r
+  end
+end
+
+local function CONTFUN(fun) 
+  return setmetatable({ __continuationFun =true },{
+    __call = function(t,...) return fun(...) end
+  })
+end
+
+local function CONT(cont,doc) 
+  return setmetatable({ __continuation = true, __doc = doc },{
+    __call = function(t,...) return cont(...) end,
+    __tostring = function(t) return (doc and json.encodeFast(docify(doc)) or "") end
+  })
+end
+
+local function isContFun(obj) return type(obj) == 'table' and obj.__continuationFun end
+local function isCont(obj) return type(obj) == 'table' and obj.__continuation end
+
+local function IF(test, t, f)
+  return CONT(function(cont,env)
+    test(function(res)
+      if res then
+        t(cont, env)
+      else
+        if f then f(cont, env) else cont(false) end
+      end
+    end, env)
+  end,{'if', test, t, f})
+end
+
+local function IFA(args)
+  return CONT(function(cont,env)
+    local function doTest(i)
+      if i > #args then
+        cont(true)
+        return
+      end
+      local test = args[i]
+      if not test.cond then test.body(cont, env)
+      else
+        test.cond(function(res)
+          if res then
+            test.body(cont, env)
+          else
+            doTest(i + 1)
+          end
+        end, env)
+      end
+      
+    end
+    doTest(1)
+  end,{'ifa',args})
+end
+
+local function AND(...)
+  local tests = {...}
+  return CONT(function(cont, env)
+    local function nextTest(index, res)
+      if index > #tests then
+        cont(res)
+      else
+        local test = tests[index]
+        if isCont(test) or type(test) == FUNCSTR then
+          test(function(res)
+            if res then
+              nextTest(index + 1, res)
+            else
+              cont(false)
+            end
+          end, env)
+        elseif test then 
+          nextTest(index + 1, test)
+        else
+          cont(test)
+        end
+      end
+    end
+    nextTest(1, false)
+  end,{'and',tests})
+end
+
+local function OR(...)
+  local tests = {...}
+  return CONT(function(cont, env)
+    local function nextTest(index, res)
+      if index > #tests then
+        cont(res)
+      else
+        local test = tests[index]
+        if isCont(test) or type(test) == FUNCSTR then
+          test(function(res)
+            if res then 
+              cont(res)
+            else
+              nextTest(index + 1, res)
+            end
+          end, env)
+        elseif test then 
+          cont(test) 
+        else
+          nextTest(index + 1, test)
+        end
+      end
+    end
+    nextTest(1, false)
+  end,{'or',tests})
+end
+
+local function WHILE(cond,body)
+  return CONT(function(cont, env)
+    local function loop()
+      cond(function(res)
+        if res then 
+          body(function() setTimeout(loop,0) end,env)
+        else
+          cont(true) -- Exit the loop
+        end
+      end, env)
+    end
+    loop()
+  end,{'while',cond,body})
+end
+
+local function REPEAT(cond,body)
+  return CONT(function(cont, env)
+    local function loop()
+      body(function()
+        cond(function(res)
+          if not res then setTimeout(loop, 0)
+          else cont(true) end
+        end, env)
+      end,env)
+    end
+    loop()
+  end,{'repeat',cond,body})
+end
+
+local function LOOP(body) -- loop forever - needs break/return
+  return CONT(function(cont, env)
+    local function loop()
+      body(function() setTimeout(loop,0) end, env)
+    end
+    loop()
+  end,{'loop',body})
+end
+
+local function WAIT(time)
+  return CONT(function(cont, env)
+    if isCont(time) or type(time) == FUNCSTR then
+      time(function(t)
+        if type(t) ~= 'number' then env.error("Expected number, got: "..tostring(t)) end
+        setTimeout(function()
+          cont(true)
+        end, t*1000)
+      end, env)
+      return
+    elseif tonumber(time) then
+      time = tonumber(time)
+    else
+      env.error("Expected number, got: "..tostring(time))
+      return
+    end
+    setTimeout(function()
+      cont(true)
+    end, time*1000)
+  end,{'wait',time})
+end
+
+local function evalArgs(args, cont, env)
+  if #args == 0 then
+    cont({})
+  else
+    local results = {}
+    local function nextArg(index)
+      local arg = args[index]
+      if type(arg) == FUNCSTR or isCont(arg) then
+        arg(function(arg1,...)
+          if index == #args then
+            results[index] = arg1
+            for _,a in ipairs({...}) do 
+              results[#results+1] = a
+            end
+            cont(results)
+          else
+            results[index] = arg1
+            nextArg(index + 1)
+          end
+        end, env)
+      else
+        results[index] = arg
+        nextArg(index + 1)
+      end
+    end
+
+    nextArg(1)
+  end
+end
+
+local function FRAME(expr)
+  return CONT(function(cont, env)
+    local __cont = function(...) env:popEnv() cont(...) end
+    env:pushEnv({__cont = {__cont}})
+    expr(__cont, env)
+  end,{'frame',expr})
+end
+
+local function BREAK()
+  return CONT(function(cont, env)
+    local frameCont = env:getVariable('__cont')
+    setTimeout(function() frameCont(true) end, 0)
+  end, {'break'})
+end
+
+local function PROGN(...)
+  local statements = {...}
+  return CONT(function(cont,env)
+    evalArgs(statements, function(values)
+      local val = true
+      if #values > 0 then val = values[#values] end
+      cont(val)
+    end,env)
+  end,{'progn',statements})
+end
+
+local function TABLE(args)
+  return CONT(function(cont, env)
+    local tbl = {}
+    local function nextVal(i)
+      if i > #args then
+        cont(tbl)
+      else
+        args[i].expr(function(key)
+          args[i].value(function(val)
+            tbl[key]=val
+            nextVal(i + 1)
+          end,env)
+        end,env)
+      end
+    end
+    nextVal(1)
+  end, {'table', args})
+end
+
+local function checkArgs(a,t1,b,t2,env)
+  if type(a) ~= t1 then env.error("Expected "..t1..", got: "..tostring(a)) end
+  if type(b) ~= t2 then env.error("Expected "..t2..", got: "..tostring(b)) end
+end
+
+local opFuns = {
+  ['add'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a + b end,
+  ['sub'] = function(a,b,env) checkArgs(a,'number',b,'number',env)return a - b end,
+  ['mul'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a * b end,
+  ['div'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a / b end,
+  ['mod'] = function(a,b,env) checkArgs(a,'number',b,'number',env )return a % b end,
+  ['pow'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a ^ b end,
+  ['eq'] = function(a,b,env) return a == b end,
+  ['neq'] = function(a,b,env) return a ~= b end,
+  ['lt'] = function(a,b,env) return a < b end,
+  ['lte'] = function(a,b,env) return a <= b end,
+  ['gt'] = function(a,b,env) return a > b end,
+  ['gte'] = function(a,b,env) return a >= b end,
+  ['betw'] = function(a,b,env) 
+    checkArgs(a,'number',b,'number',env) 
+    local ts = os.date("*t")
+    local t = ts.hour*3600 + ts.min*60 + ts.sec
+    b = b >= a and b or b + 24*3600
+    t = t >= a and t or t + 24*3600
+    return a <= t and t <= b
+  end
+}
+
+local function BINOP(op,exp1,exp2)
+  return CONT(function(cont, env)
+    exp1(function(v1)
+      exp2(function(v2)
+        if opFuns[op] then
+          local res = opFuns[op](v1, v2, env)
+          cont(res)
+        else
+          env.error("Unknown operator: " .. tostring(op))
+        end
+      end, env)
+    end, env)
+  end, {'binop', op, exp1, exp2})
+end
+
+local unOpFuns = {
+  add = function(v,a,b,env) return v+(a or b) end,
+  neg = function(v,a,b,env) return - v end,
+  sub = function(v,a,b,env) return a and a-v or v-b end,
+  mul = function(v,a,b,env) return v*(a or b) end,
+  div = function(v,a,b,env) return a and a/v or v/b  end,
+  daily = function(v,a,b,env)
+    local e = env.trigger
+    if not e then return env.error("No trigger in environment") end
+    return e.type == 'Daily'  -- False if not a daily event triggering
+  end,
+  interv = function(v,a,b,env)
+    local e = env.trigger
+    if not e then return env.error("No trigger in environment") end
+    return e.type == 'Interval'  -- False if not a daily event triggering
+  end,
+}
+
+
+local function UNOP(op, expr, v1, v2)
+  return CONT(function(cont, env)
+    expr(function(val)
+      if unOpFuns[op] then
+        local res = unOpFuns[op](val,v1,v2,env)
+        cont(res)
+      else
+        env.error("Unknown operator: " .. tostring(op))
+      end
+    end, env)
+  end, {'unop', op, expr, v1, v2})
+end
+
+
+local function TIME() return function(c,_) c(os.date("%H:%M")) end end
+local function CONST(n) 
+  local c
+  c = CONT(function(cont,env) 
+    if c.evalHook then c.evalHook(c,cont,env)
+    else cont(n) end
+  end, {'const', n})
+  return c
+end
+
+local function EVENT(ev)
+  return function(cont,env)
+    if type(ev) ~= 'table' then env.error("Bad type") end
+    local vars = env.vars
+    if vars.trigger and vars.trigger.type == ev.type then
+      cont(true)
+    else
+      cont(false)
+    end
+  end
+end
+
+local function CALL(fun,...)
+  local args = {...}
+  return CONT(function(cont,env) -- Return value out of expr
+    fun(function(fval)
+      local isCont = isContFun(fval)
+      if isCont or type(fval) == FUNCSTR then
+        evalArgs(args, function(exprs)
+          if isCont then -- continuation
+            fval(cont,env,table.unpack(exprs)) 
+          else
+            local res = {fval(table.unpack(exprs))}
+            cont(table.unpack(res))
+          end
+        end,env)
+      else env.error(fmt("%s: Expected function, got: %s", fun, tostring(fval))) end
+    end, env)
+  end, {'call', fun, args})
+end
+
+local function GETPROP(prop,obj)
+  return CONT(function(cont,env)
+    obj(function(o)
+      local res = ER.executeGetProp(o,prop,env)
+      cont(res)
+    end,env)
+  end, {'getprop', prop, obj})
+end
+
+local function AREF(tab,key)
+  return CONT(function(cont,env) -- Return value out of expr
+    tab(function(t)
+      if type(t) == 'table' then
+        key(function(k)
+          cont(t[k])
+        end,env)
+      else env.error("Expected table, got: "..tostring(t)) end
+    end,env)
+  end, {'aref', tab, key})
+end
+
+local function VAR(name) 
+  return CONT(function(cont,env) 
+    local val = env:getVariable(name)
+    cont(val)
+  end, {'var', name})
+end
+
+local function ASSIGNM(vars,exprs)
+  return CONT(function(cont,env) -- Return value out of expr
+    evalArgs(exprs, function(values)
+      local function nextAssign(i)
+        if i > #vars then cont(true)
+        else 
+          vars[i](env,values[i],nextAssign,i+1)
+        end
+      end
+      nextAssign(1)
+    end,env)
+  end,{'assignm',vars,exprs})
+end
+
+local function LOCAL(vars,exprs)
+  return CONT(function(cont,env)
+    evalArgs(exprs, function(values)
+      for i,var in ipairs(vars) do
+        env:pushVariable(var, values[i])
+      end
+      cont(true)
+    end,env)
+  end, {'local', vars, exprs})
+end
+
+local function INCVAR(name, op, value)
+  return CONT(function(cont, env)
+    value(function(val)
+      local var = env:getVariable(name)
+      if tonumber(var)==nil then return env.error("Not a number: "..tostring(name)) end
+      local newValue = opFuns[op](var,val)
+      env:setVariable(name, newValue)
+      cont(newValue)
+    end,env)
+  end, {'incvar', name, op, value})
+end
+
+local function VARARGSTABLE(name)
+  return CONT(function(cont, env)
+    local var = env:getVariable('...')
+    if type(var) == 'table' then
+      cont(var)
+    else
+      env.error("Expected table for varargs, got: " .. tostring(var))
+    end
+  end, {'varargs', name})
+end
+
+local function cleanVars(t)
+  local vs = {}
+  while t do
+    local c = {}
+    for k,v in pairs(t) do
+      if k:sub(1,2) ~= '__' then c[k] = v[1] end
+    end
+    vs[#vs+1] = c
+    t = t.__parent
+  end
+  return vs
+end
+
+local function ASYNCFUN(fun) --- fun(cb,...)
+  return CONTFUN(function(cont, env, ...)
+    local timedout,ref = false,nil
+    local cb = function(...) clearTimeout(ref); if not timedout then cont(...) end end
+    local timeout = fun(cb,...)
+    timeout = tonumber(timeout) or 3000
+    ref = setTimeout(function() 
+      timedout = true
+      env.error("Async function timeout after "..timeout.." ms")
+    end, timeout)
+  end)
+end
+
+local function FUNC(params, body)
+  return CONT(function(cont,env) -- Return value out of expr
+    cont(CONTFUN(function(cont,env,...)
+      local __cont = function(...) 
+         env:popEnv() cont(...)
+      end
+      env:pushEnv({__cont = {__cont}, __return = {__cont}})
+      local args = {...}
+      for i=1,#params-1 do
+        local param = params[i]
+        local value = args[i]
+        env:pushVariable(param,value)
+      end
+      local param = params[#params]
+      if param == '...' then
+        local vararg = {}
+        for i=#params,#args do vararg[#vararg+1] = args[i] end
+        env:pushVariable(param, vararg)
+      else
+        local value = args[#params]
+        env:pushVariable(param,value)
+      end
+      --print(json.encode(args),json.encodeFast(cleanVars(env.vars)))
+      body(__cont,env)
+    end))
+  end,{'func',params,body})
+end
+
+local function RETURN(...)
+  local args = {...}
+  return CONT(function(cont,env) -- Return value out of expr
+    local ret = env:getVariable('__return') or env.cont or cont
+    evalArgs(args, function(exprs)
+      --print("RET", ret==cont, json.encodeFast(exprs),tostring(ret))
+      ret(table.unpack(exprs))
+    end, env)
+  end, {'return', args})
+end
+
+local function args2str(...) local r = {} for i,v in ipairs({...}) do r[i] =type(v)=='table' and json.encodeFast(v) or tostring(v) end return table.unpack(r) end
+ER.args2str = args2str
+
+local function findVar(name,vars)
+  local lastEnv = vars
+  while vars do
+    local v = vars[name]
+    if v then return v else lastEnv = vars; vars = vars.__parent end
+  end
+  return nil,lastEnv
+end
+local function createEnv(cont,err,opts)
+  local env = { vars = opts.env or {}, error = err, cont = cont }
+  local globalEnv = opts.env
+  function env:pushVariable(name,value) local v = self.vars[name] if v then v[1]=value else self.vars[name] = {value} end end
+  function env:setVariable(name,val,global)
+    if global then 
+      local v = globalEnv[name]
+      if v then v[1]=val else globalEnv[name] = {val} end
+    end
+    local v,last = findVar(name,self.vars) 
+    if v then v[1]=val else last[name] = {val} end 
+  end
+  function env:getVariable(name) 
+    local v = findVar(name,self.vars)  
+    if v then return v[1] else return _G[name] end 
+  end
+  function env:pushEnv(e) e = e or {} e.__parent = self.vars; self.vars = e end
+  function env:popEnv() self.vars = self.vars.__parent or {} end
+  return env
+end
+ER.createEnv = createEnv
+
+local function RULE(expr,opts) return function() return ER.defRule(expr,opts) end end
+local function RULECHECK(rule) return 
+  CONT(function(cont,env) 
+    rule(function(...)
+      if env.check then env.check(env.rule,...) end
+      cont(...)
+    end,env) 
+  end,{'rulecheck',rule}) 
+end
+
+local function EXPR(expr,opts)
+  return function()
+    opts = opts or {}
+    local res = {}
+    local cont = opts.cont or function(...) 
+      res = {...} 
+      if not opts.nolog then print(args2str(...)) end 
+    end
+    local src = opts.src or "<expr>"
+    local err = opts.err or function(str) print(fmt("❌ '%s': %s", src // 80,str)) end
+    local env = createEnv(cont, err, opts)
+    env.src = src
+    expr(cont, env)
+    return table.unpack(res)
+  end
+end
+
+local funs = {
+  IF = IF,
+  AND = AND,
+  OR = OR,
+  WAIT = WAIT,
+  PROGN = PROGN,
+  TIME = TIME,
+  CONST = CONST,
+  AREF = AREF,
+  BINOP = BINOP,
+  CALL = CALL,
+  EVENT = EVENT,
+  RULE = RULE
+}
+
+local compa, comp = function(_) end, {}
+
+local function compileList(list) local r = {} for _,e in ipairs(list) do r[#r+1] = compa(e) end return r end
+
+function comp.table(expr)
+  if expr.const then return CONST(expr.value) end
+  local args = {}
+  for _,v in ipairs(expr.value) do
+    local key = v.key and {type='const',value=v.key} or v.expr
+    args[#args+1] = { expr = compa(key), value = compa(v.value) }
+  end
+  return TABLE(args)
+end
+
+locals = {}
+local function pushLocals(ls) ls.__parent = locals; locals = ls end
+local function popLocals() locals = locals.__parent end
+local function isLocal(name) return locals and locals[name] end
+
+function comp.block(expr,noframe)
+  if expr.locals then pushLocals(expr.locals) end
+  local args = compileList(expr.statements)
+  if expr.locals then popLocals() end
+  noframe = noframe or not expr.scope
+  if #args == 1 then return noframe and args[1] or FRAME(args[1]) end
+  return noframe and PROGN(table.unpack(args)) or FRAME(PROGN(table.unpack(args)))
+end
+
+function comp.binop(expr)
+  local exp1 = compa(expr.exp1)
+  local exp2 = compa(expr.exp2)
+  return BINOP(expr.op, exp1, exp2)
+end
+
+function comp.seqop(expr)
+  local args = compileList(expr.exprs)
+  if expr.op == 'or' then return OR(table.unpack(args))
+  elseif expr.op == 'and' then return AND(table.unpack(args))
+  else error("Unknown seqop: "..tostring(expr.op)) 
+  end
+end
+
+function comp.unop(expr)
+  return UNOP(expr.op, compa(expr.exp), expr.a, expr.b)
+end
+
+local builtin = { wait = 'WAIT' }
+local BUILTIN = function(name)
+  if builtin[name] then return funs[builtin[name]] end
+  return nil
+end
+
+comp['break'] = function(expr)
+  return BREAK()
+end
+
+comp['breakif'] = function(expr)
+  return IF(compa(expr.cond), BREAK())
+end
+
+function comp.call(expr)
+  local args = compileList(expr.args)
+  local fun = expr.fun.type == 'name' and BUILTIN(expr.fun.value) 
+  if fun then return fun(table.unpack(args))
+  else
+    fun = compa(expr.fun)
+    return CALL(fun, table.unpack(args))
+  end
+end
+
+function comp.name(expr) 
+  return VAR(expr.value) 
+end
+
+comp['return'] = function(expr)
+  local args = compileList(expr.exp)
+  return RETURN(table.unpack(args))
+end
+
+
+comp['if'] = function(expr)
+  local args = {}
+  for _,c in ipairs(expr.args) do
+    args[#args+1] = { cond = c.cond and compa(c.cond) or nil, body = compa(c.body) }
+  end
+  return IFA(args)
+end
+
+local function condFRAME(frame,expr)
+  return frame and FRAME(expr) or expr
+end
+
+comp['while'] = function(expr)
+  local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
+  return condFRAME(frame,WHILE(compa(expr.cond), compa(expr.body)))
+end
+comp['repeat'] = function(expr)
+  local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
+  return condFRAME(frame,REPEAT(compa(expr.cond), compa(expr.body)))
+end
+
+comp['loop'] = function(expr)
+  local args = compileList(expr.statements)
+  if #args == 1 then return LOOP(args[1]) end
+  return LOOP(PROGN(table.unpack(args)))
+end
+
+function comp.num(expr) return CONST(expr.value) end
+function comp.const(expr) return CONST(expr.value) end
+function comp.str(expr) return CONST(expr.value) end
+
+function comp.aref(expr)
+  local table = compa(expr.tab)
+  
+  local key = compa({type='num',value=expr.idx})
+  return AREF(table, key)
+end
+
+comp['local'] = function(expr)
+  return LOCAL(expr.names,compileList(expr.exprs or {}))
+end
+
+function comp.assign(expr)
+  local exprs = compileList(expr.exprs)
+  local vars = {}
+  for _,v in ipairs(expr.vars) do
+    if v.type == 'name' then
+      local var = v.value
+      vars[#vars+1] = function(env,val,cont,i) env:setVariable(var,val,not isLocal(var)) cont(i) end--{type='var',value=v.value}
+    elseif v.type == 'aref' then
+      local var = {tab=compa(v.tab), idx=v.idx}
+      vars[#vars+1] = function(env,val,cont,i) --{type='aref',tab=compa(v.tab), idx=v.idx}
+        var.tab(function(tab)
+          tab[v.idx] = val
+          cont(i)
+        end,env)
+      end
+    elseif v.type == 'getprop' then
+      local var = {obj=compa(v.obj), prop=v.prop}
+      vars[#vars+1] = function(env,val,cont,i)
+        var.obj(function(obj)
+          ER.executeSetProp(obj,var.prop,val,env)
+          cont(i)
+        end,env)
+      end
+    else
+      error("Not supported assignment: "..tostring(v.type))
+    end
+  end
+  return ASSIGNM(vars, exprs)
+end
+
+function comp.incvar(expr) return INCVAR(expr.name,expr.op,compa(expr.value)) end
+
+function comp.getprop(expr) return GETPROP(expr.prop,compa(expr.obj)) end
+
+local function makeVarAssign(var) return function(env,val,cont,i) env:setVariable(var,val) cont(i) end end
+
+function comp.functiondef(expr)
+  local fun = compa(expr.fun)
+  return ASSIGNM({makeVarAssign(expr.name[1])},{fun})
+end
+
+comp['function'] = function(expr)
+  local fun = compa(expr.body)
+  return FRAME(FUNC(expr.params, fun))
+end
+
+comp['functionexpr'] = function(expr) return compa(expr.fun) end
+
+comp['varargstable'] = function(expr) return VARARGSTABLE() end
+
+function compa(expr)
+  if comp[expr.type] then return comp[expr.type](expr)
+  else error("Not implemented:"..tostring(expr.type)) end
+end
+
+function compile(ast)
+  if ast.type == 'block' then
+    return comp.block(ast,true)
+  elseif ast.type == 'ruledef' then
+    local head = ast.head
+    local body = ast.body
+    local h = compa(head)
+    local b = compa(body)
+    return IF(RULECHECK(h),b)
+  else error("Not implemented:"..tostring(ast.type)) end
+end
+
+local function idfun() end
+
+local function eval(str,opts)
+  assert(type(str) == "string","Expected string")
+  opts = opts or {}
+  local isRule = false
+  local stat,ast = xpcall(function()
+    local tkns = ER.tokenize(str)
+    if opts.tkns then tkns.dump() end
+    if tkns.containsType('t_rule') then
+      table.insert(tkns.stream,1,{type='t_rulebegin',dbg={from=0,to=0}})
+      table.insert(tkns.stream,{type='t_ruleend',dbg={from=0,to=0}})
+      isRule = true
+    end
+    ast,j,k = ER.parse(tkns)
+    return ast
+  end,function(e)
+    local info = debug.getinfo(2)
+    dbg = debug.traceback()
+    return e
+  end)
+  if not stat then print(ast) return idfun end
+  if opts.tree then print(json.encodeFormated(ast)) end
+  locals = nil
+  local cont = compile(ast)
+  opts.src = ast._src
+  return isRule and RULE(cont,opts) or EXPR(cont,opts)
+end
+
+ER.compile = compile
+ER.eval = eval
+ER.ASYNCFUN = ASYNCFUN
