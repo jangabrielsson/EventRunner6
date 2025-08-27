@@ -275,7 +275,17 @@ function findTriggers(c, cont, env)
     end
     scanArg(cont, env ,a1, a2)
   elseif typ == 'rulecheck' then
-    scanArg(cont, env, earg(c,1))
+    scanArg(cont, env, earg(c,1)) 
+  elseif typ == 'call' then
+    local args = earg(c,2)
+    if #args > 0 then
+      scanArg(cont, env, table.unpack(args)) -- fun, args
+    else cont() end
+  elseif typ == 'var' then
+    local name = earg(c,1)
+    if ER.triggerVars[name] then
+      table.insert(env.triggers,{type='triggerVar',name=name})
+    end
   else
     print("Unsupported trigger type:", etype(c), json.encodeFast(c))
   end
@@ -290,6 +300,7 @@ function createER(qa)
   ER._er = _er
   sourceTrigger = SourceTrigger()
   sourceTrigger:run()
+  ER.sourceTrigger = sourceTrigger
   
   local env = {catch = catch}
   for k,v in pairs(env) do RuleEnv[k] = {v} end
@@ -305,12 +316,19 @@ function createER(qa)
     __newindex = function(t,k,v) local var = RuleEnv[k] if var then var[1] = v else RuleEnv[k] = {v} end end,
   })
 
+  ER.triggerVars = {}
+  _er.triggerVariables = setmetatable({},{ 
+    __index = function(t,k) return  _er.variables[k] end,
+    __newindex = function(t,k,v) ER.triggerVars[k]=true _er.variables[k] = v end
+  })
+
   function _er.rule(str,opts) 
     opts = opts or _er.opts or {} 
     opts.env = opts.env or RuleEnv
     return ER.eval(str,opts)() 
   end
   function _er.start() 
+    ER.customDefs(_er)
     print("=========== Loading rules ================")
     local t0 = os.clock()
     _er.qa:main(_er) 

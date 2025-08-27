@@ -101,7 +101,7 @@ local function toTimeDate(str)
   return os.time{year=y~="" and y or t.year,month=m,day=d,hour=h,min=min,sec=s~="" and s or 0}
 end
 local function toTime(str)
-  local h,m,s = str:match("(%d%d):(%d%d):?%d*")
+  local h,m,s = str:match("(%d%d):(%d%d):?(%d*)")
   return 3600*h+60*m+(s and s~="" and s or 0)
 end
 
@@ -144,8 +144,12 @@ local function tknError(msg) error(msg) end
 token(" \t\n\r","[%s%c]+")
 --2019/3/30/20:30
 token("/0123456789","%d?%d?%d?%d?/?%d+/%d+/%d%d:%d%d:?%d?%d?",function (t) return {type="num", const=true, value=toTimeDate(t)} end)
-token("0123456789","%d+:%d+",function (w) if #w>5 then tknError('Bad time constant '..w) else return "%break" end end)
-token("0123456789","%d%d:%d%d:?%d?%d?",function (t) return {type='num', const=true, value=toTime(t)} end)
+token("0123456789","%d%d:%d%d:?%d?%d?",function (t) 
+  return {type='num', const=true, value=toTime(t)} 
+end)
+token("0123456789","%d+:%d+",function (w) 
+  if #w>5 then tknError('Bad time constant '..w) else return "%break" end 
+end)
 token("t+n","[t+n][/]", function (op) return {type="op", opval=trans(op)} end)
 token("#","#[A-Za-z_][%w_%-]*",function (w) return {type="event", value=w:sub(2)} end)
 token("$","%$+[_0-9a-zA-Z\xC3\xA5\xA4\xB6\x85\x84\x96]*",

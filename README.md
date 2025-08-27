@@ -43,7 +43,8 @@ end
 
 ## Rule Syntax
 
-EventRunner6 uses an intuitive syntax for defining automation rules:
+EventRunner6 uses an intuitive syntax for defining automation rules.
+For more detailed rule syntax and advanced usage, see the [EventScript documentation](doc/EventScript.md).
 
 ### Basic Rule Structure
 ```lua

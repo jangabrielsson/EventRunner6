@@ -467,15 +467,18 @@ end
 local function ASYNCFUN(fun) --- fun(cb,...)
   return CONTFUN(function(cont, env, ...)
     local timedout,ref = false,nil
-    local cb = function(...) clearTimeout(ref); if not timedout then cont(...) end end
-    local timeout = fun(cb,...)
+    local cb = function(...) if ref then clearTimeout(ref) end; if not timedout then cont(...) end end
+    local acb = setmetatable({env = env} , { __call = function(t,...) return cb(...) end })
+    local timeout = fun(acb,...)
     timeout = tonumber(timeout) or 3000
-    ref = setTimeout(function() 
-      timedout = true
-      env.error("Async function timeout after "..timeout.." ms")
-    end, timeout)
-  end)
-end
+    if timeout >= 0 then
+      ref = setTimeout(function() 
+        timedout = true
+        env.error("Async function timeout after "..timeout.." ms")
+        end, timeout)
+      end
+    end)
+  end
 
 local function FUNC(params, body)
   return CONT(function(cont,env) -- Return value out of expr
@@ -719,7 +722,16 @@ function comp.assign(expr)
   for _,v in ipairs(expr.vars) do
     if v.type == 'name' then
       local var = v.value
-      vars[#vars+1] = function(env,val,cont,i) env:setVariable(var,val,not isLocal(var)) cont(i) end--{type='var',value=v.value}
+      vars[#vars+1] = function(env,val,cont,i) 
+        if ER.triggerVars[var] then
+          local oldValue = env:getVariable(var)
+          if oldValue ~= val then
+            ER.sourceTrigger:post({type='triggerVar',name=var},0)
+          end
+        end
+        env:setVariable(var,val,not isLocal(var)) 
+        cont(i)
+      end--{type='var',value=v.value}
     elseif v.type == 'aref' then
       local var = {tab=compa(v.tab), idx=v.idx}
       vars[#vars+1] = function(env,val,cont,i) --{type='aref',tab=compa(v.tab), idx=v.idx}

@@ -63,5 +63,42 @@ function builtin.once() end
 function builtin.trueFor() end
 function builtin.again() end
 
+function ER.customDefs(er)
+    local rule,var = er.rule,er.variables
+    function var.async.trueFor(cb,time,expr)
+    local trueFor = cb.env.rule.trueFor or {}
+    cb.env.rule.trueFor = trueFor
+    if expr then -- test is true
+      if not trueFor.ref then -- new, start timer
+        trueFor.trigger = cb.env.trigger
+        trueFor.ref = setTimeout(function() trueFor.ref = nil; cb(true) end, time*1000)
+        return math.huge
+      else -- already true and we have timer waiting
+        cb(false) -- do nothing
+      end
+    elseif trueFor.ref then -- test is false, and we have timer
+      clearTimeout(trueFor.ref)
+      trueFor.ref = nil
+      cb(false)
+    else
+      cb(false) -- do nothing
+    end
+    return -1 -- not async...
+  end
+
+  function var.async.again(cb,n)
+    local trueFor = cb.env.rule.trueFor
+    if trueFor then
+      if trueFor.again and trueFor.again == 0 then trueFor.again = nil return cb(0) end 
+      if trueFor.again == nil then trueFor.again,trueFor.againN = n,n end-- reset
+      trueFor.again = trueFor.again - 1
+      if trueFor.trigger and  trueFor.again > 0 then 
+        setTimeout(function() cb.env.rule:start(trueFor.trigger) end, 0)
+        cb(trueFor.againN - trueFor.again)
+      else trueFor.again = nil cb(trueFor.againN) end
+    else cb(0) end
+    return -1 -- not async...
+  end
+end
 
 
