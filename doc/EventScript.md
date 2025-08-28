@@ -6,15 +6,35 @@ EventScript is the rule-based automation language used by EventRunner6 for creat
 
 1. [Language Overview](#language-overview)
 2. [Basic Syntax](#basic-syntax)
-3. [Triggers](#triggers)
+3. [Control Structures](#control-structures)
+   - [Conditional Statements](#conditional-statements)
+   - [Loop Statements](#loop-statements)
+4. [Assignment](#assignment)
+   - [Simple Assignment](#simple-assignment)
+   - [Multiple Assignment](#multiple-assignment)
+5. [Tables](#tables)
+   - [Table Creation](#table-creation)
+   - [Table Access](#table-access)
+6. [Expressions](#expressions)
+   - [Variables](#variables)
+   - [Constants](#constants)
+   - [Operators](#operators)
+7. [Triggers](#triggers)
    - [Daily Triggers](#daily-triggers)
    - [Interval Triggers](#interval-triggers)
    - [Event Triggers](#event-triggers)
    - [Device Triggers](#device-triggers)
    - [Trigger Variables](#trigger-variables)
-4. [Functions](#functions)
+8. [Functions](#functions)
    - [trueFor Function](#truefor-function)
-5. [Property Functions](#property-functions)
+   - [Date Functions](#date-functions)
+   - [Log and Formatting Functions](#log-and-formatting-functions)
+   - [Event Functions](#event-functions)
+   - [Math Functions](#math-functions)
+   - [Global Variable Functions](#global-variable-functions)
+   - [Table Functions](#table-functions)
+   - [Rule Functions](#rule-functions)
+9. [Property Functions](#property-functions)
    - [Device Properties](#device-properties)
    - [Device Control Actions](#device-control-actions)
    - [Device Assignment Properties](#device-assignment-properties)
@@ -23,12 +43,12 @@ EventScript is the rule-based automation language used by EventRunner6 for creat
    - [Scene Properties](#scene-properties)
    - [Information Properties](#information-properties)
    - [List Operations](#list-operations)
-6. [Examples](#examples)
-7. [Best Practices](#best-practices)
+10. [Examples](#examples)
+11. [Best Practices](#best-practices)
 
 ## Language Overview
 
-EventScript uses a simple `trigger => action` syntax where:
+EventScript uses a simple `triggerExpression => action` syntax where:
 - **Triggers** define when a rule should execute
 - **Actions** define what should happen when triggered
 - **Properties** provide access to device states and controls
@@ -36,14 +56,302 @@ EventScript uses a simple `trigger => action` syntax where:
 ## Basic Syntax
 
 ```lua
-rule("trigger => action")
+rule("triggerExpression => action")
 ```
 
 Rules are defined using the `rule()` function with a string containing the trigger-action pattern.
+The trigger is an expression returning true or false, and when true the action is executed. It can thus be thought of as
+```lua
+IF trigger THEN action END
+```
+The trigger must be an "pure" expression and not contain any control statements or side effects. Ex. assignments or print statemenets. The reason being that while compiling the rules, the trigger part may be evaluated multiple times.
+The trigger part is inspected during compilation to find out what events causes the rule to be triggered. Ex. if an fibaro global variable or a device property is used as part of the expression, the rule will trigger when those change in the system.
 
-## Triggers
+## Control Structures
+
+EventScript supports standard control flow structures for implementing complex logic within rules.
+
+### Conditional Statements
+
+Use conditional statements to execute code based on conditions:
+
+```lua
+-- Simple if statement
+if <test> then 
+  <statements> 
+end
+
+-- If-else statement
+if <test> then 
+  <statements> 
+else 
+  <statements> 
+end
+
+-- If-elseif-else statement (elseif can be repeated)
+if <test> then 
+  <statements> 
+elseif <test2> then 
+  <statements> 
+else 
+  <statements> 
+end
+```
+
+**Examples:**
+```lua
+rule("sensor:breached => if luxSensor:value < 100 then light:on end")
+rule("@sunset => if house:isAllOff then alarm:arm else log('House not secure') end")
+```
+
+### Loop Statements
+
+EventScript supports various loop constructs:
+
+```lua
+-- Numeric for loop
+for i = 1, n[, step] do 
+  <statements> 
+end
+
+-- Iterator for loop (arrays)
+for _, v in ipairs(<list>) do 
+  <statements> 
+end
+
+-- Iterator for loop (tables)
+for k, v in pairs(<table>) do 
+  <statements> 
+end
+
+-- While loop
+while <test> do 
+  <statements> 
+end
+
+-- Repeat-until loop
+repeat 
+  <statements> 
+until <test>
+```
+
+**Examples:**
+```lua
+rule("@08:00 => for i=1,5 do lights[i]:on end")
+rule("motionDetected => for _,light in ipairs(hallwayLights) do light:on end")
+```
+
+## Assignment
+
+EventScript supports various assignment patterns for working with variables and values.
+
+### Simple Assignment
+
+Assign values to variables using the assignment operator:
+
+```lua
+var = <expr>
+```
+
+**Examples:**
+```lua
+rule("sensor:temp => temperature = sensor:temp")
+rule("@morning => lightLevel = 80")
+```
+
+### Multiple Assignment
+
+Assign multiple values in a single statement:
+
+```lua
+var1, var2, ..., varn = expr1, expr2, ...
+```
+
+Functions can return multiple values, with the last expression supporting multiple return values:
+
+```lua
+var1, var2, var3 = 42, (function() return 3, 4 end)()
+```
+
+**Examples:**
+```lua
+rule("weatherUpdate => temp, humidity = weatherStation:temp, weatherStation:humidity")
+```
+
+## Tables
+
+Tables are the primary data structure in EventScript, used for arrays, dictionaries, and complex data organization.
+
+### Table Creation
+
+Create tables using various syntaxes:
+
+```lua
+-- Array-style table
+local v = { <expr1>, <expr2>, ..., <exprn> }
+
+-- Dictionary-style table
+local v = { <key1> = <expr1>, <key2> = <expr2>, ..., <keyn> = <exprn> }
+
+-- Mixed table with computed keys
+local v = { [<expr1>] = <expr2>, [<expr3>] = <expr4>, ..., [<exprn>] = <exprm> }
+```
+
+**Examples:**
+```lua
+-- Device groups
+livingRoomLights = {66, 67, 68}
+deviceStates = { motion = false, door = "closed", temp = 22 }
+sensorMap = { [101] = "kitchen", [102] = "bedroom" }
+```
+
+### Table Access
+
+Access and modify table values:
+
+```lua
+-- Dot notation (for string keys)
+<table>.<key> = <expr>
+value = <table>.<key>
+
+-- Bracket notation (for any key type)
+<table>[<expr>] = <expr>
+value = <table>[<expr>]
+```
+
+**Examples:**
+```lua
+rule("motion:breached => deviceStates.motion = true")
+rule("temp:value => sensorData[temp:id] = temp:value")
+```
+
+## Expressions
+
+Expressions in EventScript are used to create complex trigger conditions and perform calculations within rules.
+
+### Variables
+
+EventScript supports both local and global variables with a specific scope resolution order.
+
+#### Variable Declaration
+
+```lua
+-- Local variables (scoped to the current rule)
+local v1, ..., vn [= expr1, ..., exprn]
+
+-- Global variables (accessible across all rules)
+v1, ..., vn [= expr1, ..., exprn]
+```
+
+#### Variable Resolution Order
+
+When accessing a variable, EventScript checks in this order:
+1. **Local EventScript variable** (rule-scoped)
+2. **Global EventScript variable** (system-wide)
+3. **Global Lua variable** (built-in functions and constants)
+
+#### Variable Assignment
+
+When assigning to a variable that doesn't exist, EventScript creates an EventScript Global variable by default.
+
+**Examples:**
+```lua
+rule("@08:00 => local brightness = 80; lights:value = brightness")
+rule("sensor:temp => temp = sensor:temp")  -- Creates global variable
+rule("motion:breached => if temp > 25 then fan:on end")  -- Uses global variable
+```
+
+### Constants
+
+EventScript provides various types of constants for use in expressions.
+
+#### Time Constants
+
+Time values can be specified in `HH:MM:SS` or `HH:MM` format:
+
+```lua
+rule("sensor:breached & 23:00..05:00 => log('Breached at night')")
+rule("@@00:00:10 => log('Ping every 10 seconds')")
+```
+
+#### Time Representation
+
+- **Short times**: Times between 00:00 and 24:00, represented as seconds after midnight
+- **Long times**: Epoch times (like Lua's `os.time()`) for absolute timestamps
+
+#### Predefined Constants
+
+| Constant | Type | Description |
+|----------|------|-------------|
+| `sunset` | Short time | Sunset time, updates daily at midnight |
+| `sunrise` | Short time | Sunrise time, updates daily at midnight |
+| `dawn` | Short time | Dawn time, updates daily at midnight |
+| `dusk` | Short time | Dusk time, updates daily at midnight |
+| `now` | Short time | Current time (HH:MM:SS) |
+| `midnight` | Long time | Midnight timestamp, updates daily |
+| `wnum` | Number | Current week number |
+
+**Examples:**
+```lua
+rule("@sunset => outdoorLights:on")
+rule("sensor:breached & sunrise..sunset => securityAlert()")
+rule("wnum % 2 == 0 => weeklyMaintenance()")  -- Every other week
+```
+
+### Operators
+
+EventScript supports various operators for building complex expressions.
+
+#### Logical Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `&` | Logical AND | `sensor:breached & 22:00..06:00` |
+| `\|` | Logical OR | `door:open \| window:open` |
+| `!` | Logical NOT | `!alarm:armed` |
+
+#### Arithmetic Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `+` | Addition | `temp1:value + temp2:value` |
+| `-` | Subtraction | `sunset - 00:30` |
+| `*` | Multiplication | `price * quantity` |
+| `/` | Division | `total / count` |
+| `%` | Modulo | `minute % 15 == 0` |
+| `^` | Exponentiation | `base ^ power` |
+
+#### Comparison Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Equal | `temp:value == 22` |
+| `!=` or `~=` | Not equal | `door:state != "closed"` |
+| `<` | Less than | `lux:value < 100` |
+| `<=` | Less or equal | `humidity <= 60` |
+| `>` | Greater than | `temp:value > 25` |
+| `>=` | Greater or equal | `battery >= 20` |
+
+#### Assignment Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `+=` | Add and assign | `counter += 1` |
+| `-=` | Subtract and assign | `energy -= consumption` |
+| `*=` | Multiply and assign | `scale *= factor` |
+| `/=` | Divide and assign | `average /= count` |
+
+**Examples:**
+```lua
+rule("temp:value > 25 & humidity < 60 => fan:on")
+rule("@sunset-00:30 => lights:on")  -- 30 minutes before sunset
+rule("motion:breached => counter += 1; log('Motion count: %d', counter)")
+```
+
+##Triggers
 
 Triggers define the conditions under which rules should execute.
+The triggerExpression part of a rule can be a complex expression of triggers returning true or false
 
 ### Daily Triggers
 
@@ -55,13 +363,14 @@ rule("@{time1,time2,...} => action")      -- Trigger at multiple times
 rule("@{time,catch} => action")           -- Catchup: Run if deployed after time
 rule("12:00..sunset => action")           -- Time interval guard, mostly part of more complex triggers
 ```
+Daily triggers can only specify a time during the day. To invoke the rule and specific days add a guard to the triggerExpression to test that it is the right day.
 
 **Examples:**
 ```lua
 rule("@08:00 => lights:on")               -- Turn on lights at 8 AM
 rule("@{07:00,19:00} => securityCheck()")   -- Check security at 7 AM and 7 PM
 rule("@sunset => outdoorLights:on")       -- Turn on outdoor lights at sunset
-rule("sensor:breached & sunset..sunrise => outdoorLights:on") -- Turn on outdoor lights after sunset when sensor is breached
+rule("@15:00 & day('mon-fri') => outdoorLights:on") -- Turn on outdoor lights at 15:00 or weekdays 
 ```
 
 ### Interval Triggers
@@ -138,6 +447,152 @@ rule("trueFor(00:05, sensor:safe) => light:off")
 
 rule("trueFor(00:10, door:open) => log('Door open for %d minutes', 10*again(5))")
 -- Log message with again(n) re-enabling the condition n times
+```
+
+### Date Functions
+
+Date functions allow you to test properties of the current day and time ranges.
+
+#### Day Testing Functions
+
+```lua
+wday('wed-thu,sun')     -- Test current weekday
+day('1,13-last')        -- Test current day of month
+month('jul-sep')        -- Test current month
+date('* 10-12 * 8 *')   -- Full date/time test (min,hour,day,month,wday)
+```
+
+**Day Function Syntax:**
+- `day('1,13-last')` - 'last' refers to the last day in month
+- `day('1,lastw-last')` - First day and last week in month (lastw = last day - 6)
+
+**Examples:**
+```lua
+rule("@15:00 & wday('mon-fri') => workdayRoutine()")     -- Weekday schedule
+rule("@08:00 & day('1') => monthlyReport()")             -- First day of month
+rule("@sunset & month('dec-feb') => winterLights:on")    -- Winter months
+rule("@12:00 & date('* * 1,15 * *') => biweeklyCheck()") -- 1st and 15th of month
+```
+
+#### Time Range Testing
+
+```lua
+<time1>..<time2>       -- Test if current time is between times (inclusive)
+```
+
+**Examples:**
+```lua
+rule("motion:breached & 22:00..06:00 => nightLight:on")  -- Night hours
+rule("door:open & sunrise..sunset => dayAlert()")        -- Daytime hours
+```
+
+### Log and Formatting Functions
+
+Functions for logging and string formatting within rules.
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `log(fmt, ...)` | Log formatted message | `log('Temperature: %d°C', temp)` |
+| `fmt(...)` | Format string without logging | `message = fmt('Status: %s', status)` |
+| `HM(t)` | Format time as "HH:MM" | `timeStr = HM(os.time())` |
+| `HMS(t)` | Format time as "HH:MM:SS" | `timeStr = HMS(os.time())` |
+
+**Examples:**
+```lua
+rule("sensor:temp => log('Temperature changed to %d°C', sensor:temp)")
+rule("@08:00 => log('Good morning! Time is %s', HM(now))")
+rule("alarm:breached => message = fmt('ALERT at %s', HMS(now))")
+```
+
+### Event Functions
+
+Functions for posting, subscribing to, and managing events.
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `post(event, time)` | Post event at specified time | `post(#morningEvent, '08:00')` |
+| `cancel(ref)` | Cancel posted event | `cancel(timerRef)` |
+| `subscribe(event)` | Subscribe to remote events | `subscribe(#remoteEvent)` |
+| `publish(event)` | Publish event to remote systems | `publish(#statusUpdate)` |
+| `remote(deviceId, event)` | Send event to specific QuickApp | `remote(123, #customEvent)` |
+
+**Examples:**
+```lua
+rule("@sunset => timerRef = post(#lightsOff, '+01:00')")  -- Post event in 1 hour
+rule("motion:breached => cancel(timerRef)")               -- Cancel scheduled event
+rule("#remoteEvent => log('Received remote event')")     -- Handle remote event
+rule("alarm:armed => remote(456, #securityAlert)")       -- Send to specific device
+```
+
+### Math Functions
+
+Mathematical and statistical functions for calculations.
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `sign(t)` | Return sign of number (-1, 0, 1) | `direction = sign(temperature - 20)` |
+| `rnd(min, max)` | Random number in range | `delay = rnd(5, 15)` |
+| `round(num)` | Round to nearest integer | `temp = round(sensor:temp)` |
+| `sum(...)` | Sum of arguments or table elements | `total = sum(1, 2, 3, 4)` |
+| `average(...)` | Average of arguments or table | `avg = average(temps)` |
+| `size(t)` | Length of array | `count = size(deviceList)` |
+| `min(...)` | Minimum value | `lowest = min(temperatures)` |
+| `max(...)` | Maximum value | `highest = max(temperatures)` |
+| `sort(t)` | Sort table in place | `sort(values)` |
+| `osdate(t)` | Same as os.date | `dateStr = osdate('%Y-%m-%d')` |
+| `ostime(t)` | Same as os.time | `timestamp = ostime()` |
+
+**Examples:**
+```lua
+rule("sensors:temp => avgTemp = average(sensors:temp)")
+rule("@08:00 => if rnd(1,10) > 5 then specialRoutine() end")
+rule("temperatures:change => log('Range: %d to %d', min(temperatures), max(temperatures))")
+```
+
+### Global Variable Functions
+
+Functions for managing Fibaro global variables.
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `global(name)` | Create global variable, returns false if exists | `isNew = global('myVariable')` |
+| `deleteglobal(name)` | Delete global variable | `deleteglobal('oldVariable')` |
+
+**Examples:**
+```lua
+rule("@startup => if global('systemStatus') then systemStatus = 'running' end")
+rule("@shutdown => deleteglobal('temporaryFlag')")
+```
+
+### Table Functions
+
+Utility functions for working with tables and arrays.
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `adde(t, v)` | Add value to end of table | `adde(logEntries, newEntry)` |
+| `remove(t, v)` | Remove value from table | `remove(activeDevices, deviceId)` |
+
+**Examples:**
+```lua
+rule("motion:breached => adde(motionLog, now)")
+rule("device:offline => remove(activeDevices, device:id)")
+```
+
+### Rule Functions
+
+Functions for controlling rule execution.
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `enable(rule)` | Enable rule by ID or object | `enable(nightModeRule)` |
+| `disable(rule)` | Disable rule by ID or object | `disable(dayModeRule)` |
+
+**Examples:**
+```lua
+rule("@sunset => enable(nightRules); disable(dayRules)")
+rule("$vacationMode == true => disable(normalRoutines)")
+rule("$maintenanceMode == false => enable(allRules)")
 ```
 
 ## Property Functions

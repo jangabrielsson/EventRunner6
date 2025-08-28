@@ -586,6 +586,7 @@ local function EXPR(expr,opts)
     local err = opts.err or function(str) print(fmt("❌ '%s': %s", src // 80,str)) end
     local env = createEnv(cont, err, opts)
     env.src = src
+    env.env = opts.env or ER.ruleEnv
     expr(cont, env)
     return table.unpack(res)
   end

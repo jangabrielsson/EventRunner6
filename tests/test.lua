@@ -1,6 +1,7 @@
 --%%name:ER6
 --%%offline:true
 --%%headers:include.txt
+--%%time:2025/08/28 10:00:00
 
 function QuickApp:main(er)
   
@@ -173,8 +174,15 @@ function QuickApp:main(er)
     -- "return 1 & true & 3",{3},{},
     -- "return 1 & 2 & false",{false},{},
     -- "return A1(5,6)",{11},{},
-    "do local a = 0; for k,v in pairs(T2) do a += v end; return a end",{14},nil,
-    "local a = 0; for k,v in ipairs(T2) do a += k end; return a",{10},nil
+    "return wday('wed-thu')",{true},nil,
+    "return wday('fri')",{false},nil,
+    "return day('28')",{true},nil,
+    "return day('lastw-last')",{true},nil, -- lastw is last day-6 in month, last is last day
+    "return month('jul-sep')",{true},nil,
+    "return date('* 10-12 * 8 *')",{true},nil, --min,hour,days,month,wday
+    
+    -- "do local a = 0; for k,v in pairs(T2) do a += v end; return a end",{14},nil,
+    -- "local a = 0; for k,v in ipairs(T2) do a += k end; return a",{10},nil
   }
   
   local function checkTriggers(rule,triggers)
@@ -240,7 +248,7 @@ function QuickApp:main(er)
     "@@-01:00 => return 42",function(r,succ) succ(checkTriggers(r,  {{type='Interval', id=1}})) end,{dumpTriggers=true},
     --"200:value => return 200",function(r) return checkTriggers(r,firstRuleTrigs) end,nil,
   }
-   testExprs(stdTests,{env = {}})
+   testExprs(stdTests,{})
   --testRules(stdRules,{})
 
 end

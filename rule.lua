@@ -9,6 +9,7 @@ local fmt  = string.format
 local function printf(...) print(string.format(...)) end
 local findTriggers, evalArg
 local Rules,RuleEnv = {},{}
+ER.ruleEnv = RuleEnv
 local catch = math.huge
 local idFun = function() end
 ER.rules = Rules

@@ -110,6 +110,23 @@ function ER.customDefs(er)
     else  cb.env.rule.once = nil; cb(false) end
     return -1 -- not async
   end
+  
+  local function makeDateFun(str,cache)
+    if cache[str] then return cache[str] end
+    local f = ER.dateTest(str)
+    cache[str] = f
+    return f
+  end
+  
+  local cache = { date={}, day = {}, month={}, wday={} }
+  var.date = function(s) return (cache.date[s] or makeDateFun(s,cache.date))() end               -- min,hour,days,month,wday
+  var.day = function(s) return (cache.day[s] or makeDateFun("* * "..s,cache.day))() end          -- day('1-31'), day('1,3,5')
+  var.month = function(s) return (cache.month[s] or makeDateFun("* * * "..s,cache.month))() end  -- month('jan-feb'), month('jan,mar,jun')
+  var.wday = function(s) return (cache.wday[s] or makeDateFun("* * * * "..s,cache.wday))() end   -- wday('fri-sat'), wday('mon,tue,wed')
+  
+  var.S1 = {click = "16", double = "14", tripple = "15", hold = "12", release = "13"}
+  var.S2 = {click = "26", double = "24", tripple = "25", hold = "22", release = "23"}
+  
 end
 
 
