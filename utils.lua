@@ -195,10 +195,10 @@ function sunCalc(time)
   local set_time = os.date("*t", sunturnTime(date, false, lat, lon, zenith, utc))
   local rise_time_t = os.date("*t", sunturnTime(date, true, lat, lon, zenith_twilight, utc))
   local set_time_t = os.date("*t", sunturnTime(date, false, lat, lon, zenith_twilight, utc))
-  local sunrise = fmt("%.2d:%.2d", rise_time.hour, rise_time.min)
-  local sunset = fmt("%.2d:%.2d", set_time.hour, set_time.min)
-  local sunrise_t = fmt("%.2d:%.2d", rise_time_t.hour, rise_time_t.min)
-  local sunset_t = fmt("%.2d:%.2d", set_time_t.hour, set_time_t.min)
+  local sunrise = rise_time.hour*3600 + rise_time.min*60
+  local sunset = set_time.hour*3600 + set_time.min*60
+  local sunrise_t = rise_time_t.hour*3600 + rise_time_t.min*60
+  local sunset_t = set_time_t.hour*3600 + set_time_t.min*60
   return sunrise, sunset, sunrise_t, sunset_t
 end
 
@@ -654,6 +654,21 @@ function SourceTrigger:postRemote(id,event)
   return self.eventEngine.postRemote(id,event)
 end
 
+local _marshalBool={['true']=true,['True']=true,['TRUE']=true,['false']=false,['False']=false,['FALSE']=false}
+
+local function marshallFrom(v) 
+  local fc = v:sub(1,1)
+  if fc == '[' or fc == '{' then local s,t = pcall(json.decode,v); if s then return t end end
+  if tonumber(v) then return tonumber(v)
+  elseif _marshalBool[v ]~=nil then return _marshalBool[v ] end
+  if v=='nil' then 
+    return nil 
+  end
+  local test = v:match("^[0-9%$s]")
+  if not test then return v end
+  local s,t = pcall(toTime,v,true); return s and t or v 
+end
+
 ER.toSeconds = toSeconds
 ER.midnight = midnight
 ER.getWeekNumber = getWeekNumber
@@ -663,3 +678,4 @@ ER.hm2sec = hm2sec
 ER.toTime = toTime
 ER.sunCalc = sunCalc
 ER.dateTest = dateTest
+ER.marshallFrom = marshallFrom

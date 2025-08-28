@@ -59,12 +59,11 @@ end
 function builtin.enable(rule) end
 function builtin.disable(rule) end
 
-function builtin.once() end
-function builtin.trueFor() end
-function builtin.again() end
-
 function ER.customDefs(er)
     local rule,var = er.rule,er.variables
+
+    ER.computedVar.now = ER.now
+
     function var.async.trueFor(cb,time,expr)
     local trueFor = cb.env.rule.trueFor or {}
     cb.env.rule.trueFor = trueFor
@@ -98,6 +97,18 @@ function ER.customDefs(er)
       else trueFor.again = nil cb(trueFor.againN) end
     else cb(0) end
     return -1 -- not async...
+  end
+
+  function var.async.once(cb,expr)
+    local once = cb.env.rule.once
+    if expr then
+      if not once then 
+        cb.env.rule.once = true
+        cb(true)
+      else cb(false) 
+      end
+    else  cb.env.rule.once = nil; cb(false) end
+    return -1 -- not async
   end
 end
 

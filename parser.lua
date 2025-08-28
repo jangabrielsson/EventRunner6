@@ -35,13 +35,13 @@ ER._opers = {
   ['&']   ={op=true, prio=5,              trans='and'},        -- logical and
   ['|']   ={op=true, prio=4,              trans='or'},         -- logical or
   ['!']   ={op=true, prio=5.1, unop=true, trans='not'},        -- logical not
-  ['in']  ={op=true, prio=0.1,            trans='in'},
+--  ['in']  ={op=true, prio=0.1,            trans='in'},
   ['=']   ={op=true, prio=0,              trans='assign'},       -- assignment
 }
 local keyword={
   ['if']='t_if',['then']='t_then',['else']='t_else',['elseif']='t_elseif',['end']='t_end',['while']='t_while',
-  ['repeat']='t_repeat',['do']='t_do',['until']='t_until',['return']='t_return',['for']='t_for',['function']='t_function',
-  ['local']='t_local',['break']='t_break',
+  ['repeat']='t_repeat',['do']='t_do',['until']='t_until',['return']='t_return',['for']='t_for',['fun'..'ction']='t_function',
+  ['local']='t_local',['break']='t_break',['in']='t_in',
   ['+=']='t_addinc',['-=']='t_subinc',['*=']='t_mulinc',['/=']='t_divinc',
   ['=>']='t_rule',
   ['true']='t_true',['false']='t_false',['nil']='t_nil',
@@ -53,10 +53,10 @@ local opers1 = {} for k,v in pairs(opers0) do opers1[v.trans] = v end
 ER._opers1 = opers1
 
 local TKMT = {__tostring = function (err) 
-    if type(err) == 'string' then return err end
-    local src = err.src or ""
-    local ptr = string.rep(' ',err.from-1)..string.rep('^',err.to-err.from+1)
-    return fmt("%s: %s at pos %d\n%s\n%s\n",err.type,err.msg,err.from,src,ptr)
+  if type(err) == 'string' then return err end
+  local src = err.src or ""
+  local ptr = string.rep(' ',err.from-1)..string.rep('^',err.to-err.from+1)
+  return fmt("%s: %s at pos %d\n%s\n%s\n",err.type,err.msg,err.from,src,ptr)
 end}
 
 local function createError(typ,msg,from,to,src,mt)
@@ -194,12 +194,14 @@ token("@$=<>!+-*&|/^~:","[@%$=<>!+%-*&|/%^~;:][%+@=<>&|:%.]?",
 function (w) return 
   keyword[w] and {type=keyword[w], keyw=true} or 
   opers0[w] and {type='op', opval=trans(w)} 
-  or tknError("Bad token '"..w.."'") end)
+  or tknError("Bad token '"..w.."'")
+end)
 token("{}(),[]#%;.","[%.{}%(%),%[%]#%%;]", 
 function (w) return 
   keyword[w] and {type=keyword[w], keyw=true} or 
   opers0[w] and {type='op', opval=trans(w)} 
-  or tknError("Bad token '"..w.."'") end)
+  or tknError("Bad token '"..w.."'") 
+end)
 
 local function dispatch(c,ctx) 
   for _,m in ipairs(patterns[c] or {}) do
@@ -470,7 +472,9 @@ function stat(tkns)
     local step
     if tkns.matchpt('t_comma') then
       step = expr(tkns,{'t_comma','t_do','t_eof'})
-    else step = {type='num',value=1,const=true,_dbg=tkns.peek().dbg} end
+    else 
+      step = {type='num',value=1,const=true,_dbg=tkns.peek().dbg} 
+    end
     tkns.matcht('t_do',"Expected DO in FOR loop")
     local body = block(tkns,endEnd)
     tkns.matcht('t_end',"Expected END in FOR loop")
@@ -488,6 +492,8 @@ function stat(tkns)
     return d
   else -- for namelist in exprlist do block_end
     local n = namelist(tkns)
+    if #n < 1 or #n > 2 then perror("Expected 1 or 2 variables in FOR in loop",tkns.peek()) end
+    if #n == 1 then n[2] = '_' end
     tkns.matcht('t_in',"Expected 'in' in FOR loop")
     local e = exprlist(tkns)
     tkns.matcht('t_do',"Expected DO in FOR loop")

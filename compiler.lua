@@ -307,6 +307,7 @@ local unOpFuns = {
   sub = function(v,a,b,env) return a and a-v or v-b end,
   mul = function(v,a,b,env) return v*(a or b) end,
   div = function(v,a,b,env) return a and a/v or v/b  end,
+  ['not'] = function(v,a,b,env) return not v  end,
   daily = function(v,a,b,env)
     local e = env.trigger
     if not e then return env.error("No trigger in environment") end
@@ -333,8 +334,6 @@ local function UNOP(op, expr, v1, v2)
   end, {'unop', op, expr, v1, v2})
 end
 
-
-local function TIME() return function(c,_) c(os.date("%H:%M")) end end
 local function CONST(n) 
   local c
   c = CONT(function(cont,env) 
@@ -396,11 +395,24 @@ local function AREF(tab,key)
   end, {'aref', tab, key})
 end
 
-local function VAR(name) 
+local function VAR(name,cvar) 
   return CONT(function(cont,env) 
-    local val = env:getVariable(name)
-    cont(val)
+    if cvar then cont(ER.computedVar[name]()) else cont(env:getVariable(name)) end
   end, {'var', name})
+end
+
+local function GVAR(name) 
+  return CONT(function(cont,env) 
+    local val = fibaro.getGlobalVariable(name)
+    cont(ER.marshallFrom(val))
+  end, {'gvar', name})
+end
+
+local function QVAR(name) 
+  return CONT(function(cont,env) 
+    local val = quickApp:getVariable(name)
+    cont(val)
+  end, {'qvar', name})
 end
 
 local function ASSIGNM(vars,exprs)
@@ -589,8 +601,11 @@ local funs = {
   CONST = CONST,
   AREF = AREF,
   BINOP = BINOP,
+  UNOP = UNOP,
   CALL = CALL,
-  EVENT = EVENT,
+  GETPROP = GETPROP,
+  EXPR = EXPR,
+  FUNC = FUNC,
   RULE = RULE
 }
 
@@ -665,7 +680,12 @@ function comp.call(expr)
 end
 
 function comp.name(expr) 
-  return VAR(expr.value) 
+  if expr.vt == 'ev' then
+    local cvar = ER.computedVar[expr.value]
+    return VAR(expr.value,cvar) 
+  elseif expr.vt == 'gv' then return GVAR(expr.value:sub(2)) 
+  elseif expr.vt == 'qv' then return QVAR(expr.value:sub(3)) 
+  else error("Not implemented:"..tostring(expr.vt)) end
 end
 
 comp['return'] = function(expr)
@@ -701,6 +721,42 @@ comp['loop'] = function(expr)
   return LOOP(PROGN(table.unpack(args)))
 end
 
+--[[
+local function mfor(vars, expr, body)
+  local f,t,i = expr()
+  kn ,vn = vars[1],vars[2]
+  vars[kn] = i
+  while true do
+    vars[kn], vars[vn] = f(t,vars[kn])
+    if vars[kn] == nil then break end
+    body()
+  end
+end
+--]]
+
+local function FORIN(vars,expr,body)
+  return FRAME(function(cont,env)
+    local kn,vn = table.unpack(vars)
+    env:pushVariable(kn,nil)
+    env:pushVariable(vn,nil)
+    expr(function(f,t,i)
+      local k,v = i,nil
+      local function loop()
+        k,v = f(t,k)
+        env:setVariable(kn,k)
+        env:setVariable(vn,v)
+        if not k then return cont(true) end
+        body(function() setTimeout(loop,0) end, env)
+      end
+      loop()
+    end,env)
+  end),{'forin',vars,expr,body}
+end
+
+comp['forin'] = function(expr)
+  return FORIN(expr.names,compa(expr.exp[1]),compa(expr.body))
+end
+
 function comp.num(expr) return CONST(expr.value) end
 function comp.const(expr) return CONST(expr.value) end
 function comp.str(expr) return CONST(expr.value) end
@@ -721,17 +777,33 @@ function comp.assign(expr)
   local vars = {}
   for _,v in ipairs(expr.vars) do
     if v.type == 'name' then
+      if v.vt == 'ev' then
       local var = v.value
-      vars[#vars+1] = function(env,val,cont,i) 
+      vars[#vars+1] = function(env,val,cont,i)
         if ER.triggerVars[var] then
           local oldValue = env:getVariable(var)
           if oldValue ~= val then
-            ER.sourceTrigger:post({type='triggerVar',name=var},0)
+            ER.sourceTrigger:post({type='trigger-variable',name=var},0)
           end
         end
         env:setVariable(var,val,not isLocal(var)) 
         cont(i)
-      end--{type='var',value=v.value}
+      end
+    elseif v.vt == 'gv' then
+      local var = v.value:sub(2)
+      vars[#vars+1] = function(env,val,cont,i) 
+        fibaro.setGlobalVariable(var,type(val)=='string' and val or json.encodeFast(val))
+        cont(i)
+      end
+    elseif v.vt == 'qv' then
+      local var = v.value:sub(3)
+      vars[#vars+1] = function(env,val,cont,i) 
+        quickApp:setVariable(var,val)
+        cont(i)
+      end
+    else
+      error("Not implemented: "..tostring(v.vt))
+    end
     elseif v.type == 'aref' then
       local var = {tab=compa(v.tab), idx=v.idx}
       vars[#vars+1] = function(env,val,cont,i) --{type='aref',tab=compa(v.tab), idx=v.idx}
