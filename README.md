@@ -44,7 +44,7 @@ end
 ## Rule Syntax
 
 EventRunner6 uses an intuitive syntax for defining automation rules.
-For more detailed rule syntax and advanced usage, see the [EventScript documentation](doc/EventScript.md).
+For more detailed rule syntax and advanced usage, see the [EventScript reference](doc/EventScript.md). Also a more tutorial style document at [EventScript tutorial](doc/Tutorial.md)
 
 ### Basic Rule Structure
 ```lua

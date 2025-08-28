@@ -1,7 +1,10 @@
 --%%name:EventRunner6
 --%% offline:true
 --%%headers:include.txt
+--%%uid:f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c
 --%%save:EventRunner6.fqa
+
+if #api.get("/devices?name=ERUpdater")== 0 then fibaro.plua.lib.loadQA("updater.lua") end
 
 function QuickApp:main(er)
   local rule,var = er.rule,er.variables
