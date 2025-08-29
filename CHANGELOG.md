@@ -1,8 +1,7 @@
-# Changelog
+# Ch# Changelog
 
 ## [v0.0.2] - 2025-08-29
 
-[0;34m[INFO][0m Generating release notes from commits since ...
 ## Changes in v0.0.2
 
 ### All commits:
@@ -30,4 +29,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial project setup
 - EventScript language implementation
-- Tutorial and reference documentation
+- Tutorial and reference documentationngelog

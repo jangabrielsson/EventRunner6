@@ -129,7 +129,7 @@ generate_release_notes() {
     local last_tag=$1
     local new_version=$2
     
-    info "Generating release notes from commits since $last_tag..."
+    # Don't use info() here as it might be captured
     
     local commit_range
     if [ -n "$last_tag" ]; then
@@ -348,6 +348,8 @@ main() {
                 local last_tag=$(get_last_release_tag)
                 if [ -z "$last_tag" ]; then
                     warning "No previous releases found. Generating from all commits."
+                else
+                    info "Generating release notes from commits since $last_tag..."
                 fi
                 release_notes=$(generate_release_notes "$last_tag" "$new_version")
                 break

@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="https://raw.githubusercontent.com/jangabrielsson/EventRunner6/main/assets/logo.png" alt="EventRunner6 Logo" width="320"/>
+</p>
+
 # EventRunner6
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
