@@ -72,13 +72,11 @@ check_git_status() {
     fi
     
     # Check for uncommitted changes
-    info "Running git diff-index check..."
     if ! git diff-index --quiet HEAD --; then
         error "You have uncommitted changes. Please commit or stash them first."
         git status --porcelain
         exit 1
     fi
-    info "Git diff-index check passed"
     
     # Check if we're ahead of remote
     local local_commit=$(git rev-parse HEAD)
