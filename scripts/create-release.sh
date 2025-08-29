@@ -78,20 +78,23 @@ check_git_status() {
         exit 1
     fi
     
-    # Check if we're ahead of remote
+    # Check if we're ahead of remote (unpushed commits)
     local local_commit=$(git rev-parse HEAD)
     local remote_commit=$(git rev-parse @{u} 2>/dev/null || echo "")
     
     if [ -n "$remote_commit" ] && [ "$local_commit" != "$remote_commit" ]; then
-        if ! git merge-base --is-ancestor "$remote_commit" "$local_commit"; then
+        if ! git merge-base --is-ancestor "$local_commit" "$remote_commit"; then
             error "Your branch is behind the remote. Please pull first."
             exit 1
         fi
         
-        warning "You have unpushed commits. They will be pushed with the release."
+        error "You have unpushed commits. Please push them first before creating a release."
+        echo "Unpushed commits:"
+        git log --oneline "$remote_commit..HEAD"
+        exit 1
     fi
     
-    success "Git repository is clean and ready for release"
+    success "Git repository is clean and up-to-date"
 }
 
 # Function to check required tools
@@ -229,10 +232,15 @@ create_artifacts() {
 commit_and_push() {
     local version=$1
     
-    info "Committing and pushing changes..."
+    info "Committing release changes..."
     
     # Add all changed files
     git add .version CHANGELOG.md
+    
+    # Add source files that may have been updated
+    [ -f "rule.lua" ] && git add rule.lua
+    [ -f "updater.lua" ] && git add updater.lua
+    [ -f "eventrunner.lua" ] && git add eventrunner.lua
     
     # Add artifacts if they exist
     [ -f "EventRunner6.fqa" ] && git add EventRunner6.fqa
@@ -241,14 +249,17 @@ commit_and_push() {
     # Commit the changes
     git commit -m "chore: release v$version
 
-- Update version to $version
-- Update CHANGELOG.md
-- Generate release artifacts"
+- Update version to $version in all files
+- Update CHANGELOG.md with release notes
+- Generate release artifacts (EventRunner6.fqa, ERUpdater.fqa)"
     
+    success "Committed release changes"
+    
+    info "Pushing changes to remote..."
     # Push changes
     git push origin $(git branch --show-current)
     
-    success "Committed and pushed changes"
+    success "Pushed all changes to remote"
 }
 
 # Function to create and push tag
@@ -385,21 +396,27 @@ This release includes various improvements and bug fixes."
     
     # Execute release steps
     echo ""
-    info "🚀 Creating release..."
+    info "🚀 Creating release v$new_version..."
+    echo ""
     
-    # Update version in files
+    # Step 1: Update version in files
+    info "Step 1: Updating version in source files..."
     ./scripts/setversion.sh "$new_version"
     
-    # Update changelog
+    # Step 2: Update changelog
+    info "Step 2: Updating CHANGELOG.md..."
     update_changelog "$new_version" "$release_notes"
     
-    # Create artifacts
+    # Step 3: Create artifacts
+    info "Step 3: Creating release artifacts..."
     create_artifacts
     
-    # Commit and push
+    # Step 4: Commit and push all changes
+    info "Step 4: Committing and pushing changes..."
     commit_and_push "$new_version"
     
-    # Create and push tag
+    # Step 5: Create and push tag (this creates the GitHub release)
+    info "Step 5: Creating and pushing release tag..."
     create_and_push_tag "$new_version" "$release_notes"
     
     echo ""
