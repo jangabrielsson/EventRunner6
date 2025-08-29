@@ -49,6 +49,7 @@ if not table.maxn then
 end
 
 function table.map(f,l,s) s = s or 1; local r,m={},table.maxn(l) for i=s,m do r[#r+1] = f(l[i]) end return r end
+function table.mapf(f,l,s) s = s or 1; local e=true for i=s,table.maxn(l) do e = f(l[i]) end return e end
 function table.mapAnd(f,l,s) s = s or 1; local e=true for i=s,table.maxn(l) do e = f(l[i]) if not e then return false end end return e end 
 function table.mapOr(f,l,s) s = s or 1; for i=s,table.maxn(l) do local e = f(l[i]) if e then return e end end return false end
 function table.reduce(f,l) local r = {}; for _,e in ipairs(l) do if f(e) then r[#r+1]=e end end; return r end

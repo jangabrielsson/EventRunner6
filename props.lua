@@ -15,9 +15,12 @@ local function toggle(id,prop) if on(id,prop) then fibaro.call(id,'turnOff') els
 local function profile(id,_) return api.get("/profiles/"..id) end
 local function child(id,_) return quickApp.childDevices[id] end
 local function last(id,prop) local _,t=fibaro.get(id,prop); local r = t and os.time()-t or 0; return r end
-local function cce(id,_,e) return e.type=='device' and e.property=='centralSceneEvent'and e.id==id and e.value or {} end
-local function ace(id,_,e) return e.type=='device' and e.property=='accessControlEvent' and e.id==id and e.value or {} end
-local function sae(id,_,e) return e.type=='device' and e.property=='sceneActivationEvent' and e.id==id and e.value.sceneId end
+local function cce(id,_,e) 
+  if e==nil then return {} end
+  return e.type=='device' and e.property=='centralSceneEvent'and e.id==id and e.value or {} 
+end
+local function ace(id,_,e) if e==nil then return {} end return e.type=='device' and e.property=='accessControlEvent' and e.id==id and e.value or {} end
+local function sae(id,_,e) if e==nil then return nil end return e.type=='device' and e.property=='sceneActivationEvent' and e.id==id and e.value.sceneId end
 local mapOr,mapAnd,mapF=table.mapOr,table.mapAnd,function(f,l,s) table.mapf(f,l,s); return true end
 local function partition(id) return api.get("/alarms/v1/partitions/" .. id) or {} end
 local function armState(id) return id==0 and fibaro.getHomeArmState() or fibaro.getPartitionArmState(id) end
@@ -236,7 +239,7 @@ function NumberPropObject:getProp(prop,env)
   if not gp then return env.error("Unknown property: "..tostring(prop)) end
   local fun = gp[2]
   local prop = gp[3]
-  local value = fun(self.id,prop)
+  local value = fun(self.id,prop,env.trigger)
   return value
 end
 function NumberPropObject:setProp(prop,value)
@@ -273,14 +276,14 @@ local function executeGetProp(obj,prop,env)
       local v = resolvePropObject(v)
       fo = fo or v
       if not v then return env.error("Not a prop object: "..tostring(v)) end
-      r[k] = v:getProp(prop)
+      r[k] = v:getProp(prop,env)
     end
     r = fo:reduce(prop,r)
     return r
   else
     local v = resolvePropObject(obj)
     if not v then return env.error("Not a prop object: "..tostring(v)) end
-    return v:getProp(prop)
+    return v:getProp(prop,env)
   end
 end
 

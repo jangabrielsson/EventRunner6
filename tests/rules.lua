@@ -22,6 +22,7 @@ function QuickApp:main(er)
   er.opts = { started = true, check = true, result = false, listTriggers=true }
   
   var.HT = {
+    remote = loadDevice("remoteController"),
     kitchen = {
       light = {
         roof = loadDevice("binarySwitch"),
@@ -62,8 +63,11 @@ function QuickApp:main(er)
   -- rule("@x => c += 1; if c > 2 then x = 11:00 end; log('TIME %s',HM(now))")
   -- rule("local a = 9; b = 8")
   -- rule("log(a); log('ok %s',b)")
-  var.r1 = rule("@@00:00:03 => log('ok')")
-  rule("wait(00:00:10); r1:disable()")
+  -- var.r1 = rule("@@00:00:03 => log('ok')")
+  -- rule("wait(00:00:10); r1:disable()")
+  function encode(t) return json.encode(t) end
+  rule("HT.remote:central => log('OK %s',json.encode(HT.remote:central))")
+  rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
 end
 
 function QuickApp:onInit()

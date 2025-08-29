@@ -34,6 +34,7 @@ ER._opers = {
   ['<']   ={op=true, prio=6,              trans='lt'},
   ['&']   ={op=true, prio=5,              trans='and'},        -- logical and
   ['|']   ={op=true, prio=4,              trans='or'},         -- logical or
+  ['??']  ={op=true, prio=4,              trans='nilco'},      -- nil coalescing
   ['!']   ={op=true, prio=5.1, unop=true, trans='not'},        -- logical not
 --  ['in']  ={op=true, prio=0.1,            trans='in'},
   ['=']   ={op=true, prio=0,              trans='assign'},       -- assignment
@@ -190,7 +191,7 @@ token("=","===",function (op) return {type="op", opval=trans(op)} end)
 token(".","%.%.%.",function (op) return {type="t_name", value='...'} end)
 token(".","%.%.",function (op) return {type="op", opval=trans('..')} end)
 token("$","%$%$%$?", function (op) return {type="op", opval=trans(op)} end)
-token("@$=<>!+-*&|/^~:","[@%$=<>!+%-*&|/%^~;:][%+@=<>&|:%.]?", 
+token("@$=<>!+-*&|/^~:?","[@%$=<>!+%-*&|/%^~;:%?][%+@=<>&|:%.%?]?", 
 function (w) return 
   keyword[w] and {type=keyword[w], keyw=true} or 
   opers0[w] and {type='op', opval=trans(w)} 

@@ -185,6 +185,8 @@ function QuickApp:main(er)
     -- "local a=9; case || false >> a=18 || true >> a=19 end; return a",{19},nil,
     -- "log(a); return true",{true},nil,
     "return Obj3:foo(8)",{8},nil,
+    "return nil ?? 66",{66},nil,
+    "return false ?? 66",{false},nil,
     
     -- "do local a = 0; for k,v in pairs(T2) do a += v end; return a end",{14},nil,
     -- "local a = 0; for k,v in ipairs(T2) do a += k end; return a",{10},nil

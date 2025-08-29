@@ -294,7 +294,8 @@ local opFuns = {
     b = b >= a and b or b + 24*3600
     t = t >= a and t or t + 24*3600
     return a <= t and t <= b
-  end
+  end,
+  ['nilco'] = function(a,b,env) if a ~= nil then return a else return b end end,
 }
 
 local function BINOP(op,exp1,exp2)
