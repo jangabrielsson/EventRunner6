@@ -3,6 +3,7 @@ local ER = fibaro.EventRunner
 local debugFlags = ER.debugFlags
 
 local fmt = string.format
+local function idfun() end
 
 local FUNCSTR = "funct".."ion"
 
@@ -128,7 +129,7 @@ local function WHILE(cond,body)
     local function loop()
       cond(function(res)
         if res then 
-          body(function() setTimeout(loop,0) end,env)
+          body(function() env:setTimeout(loop,0) end,env)
         else
           cont(true) -- Exit the loop
         end
@@ -143,7 +144,7 @@ local function REPEAT(cond,body)
     local function loop()
       body(function()
         cond(function(res)
-          if not res then setTimeout(loop, 0)
+          if not res then env:setTimeout(loop, 0)
           else cont(true) end
         end, env)
       end,env)
@@ -155,32 +156,50 @@ end
 local function LOOP(body) -- loop forever - needs break/return
   return CONT(function(cont, env)
     local function loop()
-      body(function() setTimeout(loop,0) end, env)
+      body(function() env:setTimeout(loop,0) end, env)
     end
     loop()
   end,{'loop',body})
 end
 
-local function WAIT(time)
+local function FRAME(expr)
   return CONT(function(cont, env)
-    if isCont(time) or type(time) == FUNCSTR then
-      time(function(t)
-        if type(t) ~= 'number' then env.error("Expected number, got: "..tostring(t)) end
-        setTimeout(function()
-          cont(true)
-        end, t*1000)
-      end, env)
-      return
-    elseif tonumber(time) then
-      time = tonumber(time)
-    else
-      env.error("Expected number, got: "..tostring(time))
-      return
-    end
-    setTimeout(function()
-      cont(true)
-    end, time*1000)
-  end,{'wait',time})
+    local __cont = function(...) env:popEnv() cont(...) end
+    env:pushEnv({__cont = {__cont}})
+    expr(__cont, env)
+  end,{'frame',expr})
+end
+
+--[[
+local function mfor(vars, expr, body)
+  local f,t,i = expr()
+  kn ,vn = vars[1],vars[2]
+  vars[kn] = i
+  while true do
+    vars[kn], vars[vn] = f(t,vars[kn])
+    if vars[kn] == nil then break end
+    body()
+  end
+end
+--]]
+
+local function FORIN(vars,expr,body)
+  return FRAME(function(cont,env)
+    local kn,vn = table.unpack(vars)
+    env:pushVariable(kn,nil)
+    env:pushVariable(vn,nil)
+    expr(function(f,t,i)
+      local k,v = i,nil
+      local function loop()
+        k,v = f(t,k)
+        env:setVariable(kn,k)
+        env:setVariable(vn,v)
+        if not k then return cont(true) end
+        body(function() env:setTimeout(loop,0) end, env)
+      end
+      loop()
+    end,env)
+  end),{'forin',vars,expr,body}
 end
 
 local function evalArgs(args, cont, env)
@@ -213,18 +232,10 @@ local function evalArgs(args, cont, env)
   end
 end
 
-local function FRAME(expr)
-  return CONT(function(cont, env)
-    local __cont = function(...) env:popEnv() cont(...) end
-    env:pushEnv({__cont = {__cont}})
-    expr(__cont, env)
-  end,{'frame',expr})
-end
-
 local function BREAK()
   return CONT(function(cont, env)
     local frameCont = env:getVariable('__cont')
-    setTimeout(function() frameCont(true) end, 0)
+    env:setTimeout(function() frameCont(true) end, 0)
   end, {'break'})
 end
 
@@ -343,18 +354,6 @@ local function CONST(n)
   return c
 end
 
-local function EVENT(ev)
-  return function(cont,env)
-    if type(ev) ~= 'table' then env.error("Bad type") end
-    local vars = env.vars
-    if vars.trigger and vars.trigger.type == ev.type then
-      cont(true)
-    else
-      cont(false)
-    end
-  end
-end
-
 local function CALL(fun,...)
   local args = {...}
   return CONT(function(cont,env) -- Return value out of expr
@@ -366,6 +365,29 @@ local function CALL(fun,...)
             fval(cont,env,table.unpack(exprs)) 
           else
             local res = {fval(table.unpack(exprs))}
+            cont(table.unpack(res))
+          end
+        end,env)
+      else env.error(fmt("%s: Expected function, got: %s", fun, tostring(fval))) end
+    end, env)
+  end, {'call', fun, args})
+end
+
+local function CALLOBJ(obj, fun, ...)
+  local args = {...}
+  return CONT(function(cont,env) -- Return value out of expr
+    obj(function(objval)
+      if type(objval) ~= 'table' then
+        return env.error(fmt("%s: Expected table for :call, got: %s", fun, tostring(objval)))
+      end
+      local fval = objval[fun]
+      local isCont = isContFun(fval)
+      if isCont or type(fval) == FUNCSTR then
+        evalArgs(args, function(exprs)
+          if isCont then -- continuation
+            fval(cont,env,objval,table.unpack(exprs)) 
+          else
+            local res = {fval(objval,table.unpack(exprs))}
             cont(table.unpack(res))
           end
         end,env)
@@ -463,28 +485,15 @@ local function VARARGSTABLE(name)
   end, {'varargs', name})
 end
 
-local function cleanVars(t)
-  local vs = {}
-  while t do
-    local c = {}
-    for k,v in pairs(t) do
-      if k:sub(1,2) ~= '__' then c[k] = v[1] end
-    end
-    vs[#vs+1] = c
-    t = t.__parent
-  end
-  return vs
-end
-
 local function ASYNCFUN(fun) --- fun(cb,...)
   return CONTFUN(function(cont, env, ...)
     local timedout,ref = false,nil
-    local cb = function(...) if ref then clearTimeout(ref) end; if not timedout then cont(...) end end
+    local cb = function(...) if ref then env:clearTimeout(ref) end; if not timedout then cont(...) end end
     local acb = setmetatable({env = env} , { __call = function(t,...) return cb(...) end })
     local timeout = fun(acb,...)
     timeout = tonumber(timeout) or 3000
     if timeout >= 0 then
-      ref = setTimeout(function() 
+      ref = env:setTimeout(function() 
         timedout = true
         env.error("Async function timeout after "..timeout.." ms")
         end, timeout)
@@ -560,6 +569,9 @@ local function createEnv(cont,err,opts)
   end
   function env:pushEnv(e) e = e or {} e.__parent = self.vars; self.vars = e end
   function env:popEnv() self.vars = self.vars.__parent or {} end
+  local cst,cct = opts.setTimeout or setTimeout,opts.clearTimeout or clearTimeout
+  function env:setTimeout(f,t) return cst(f,t) end
+  function env:clearTimeout(ref) return cct(ref) end
   return env
 end
 ER.createEnv = createEnv
@@ -596,9 +608,7 @@ local funs = {
   IF = IF,
   AND = AND,
   OR = OR,
-  WAIT = WAIT,
   PROGN = PROGN,
-  TIME = TIME,
   CONST = CONST,
   AREF = AREF,
   BINOP = BINOP,
@@ -680,6 +690,13 @@ function comp.call(expr)
   end
 end
 
+function comp.objcall(expr)
+  local args = compileList(expr.args)
+  local obj = compa(expr.obj)
+  local fun = expr.fun
+  return CALLOBJ(obj, fun, table.unpack(args))
+end
+
 function comp.name(expr) 
   if expr.vt == 'ev' then
     local cvar = ER.computedVar[expr.value]
@@ -720,38 +737,6 @@ comp['loop'] = function(expr)
   local args = compileList(expr.statements)
   if #args == 1 then return LOOP(args[1]) end
   return LOOP(PROGN(table.unpack(args)))
-end
-
---[[
-local function mfor(vars, expr, body)
-  local f,t,i = expr()
-  kn ,vn = vars[1],vars[2]
-  vars[kn] = i
-  while true do
-    vars[kn], vars[vn] = f(t,vars[kn])
-    if vars[kn] == nil then break end
-    body()
-  end
-end
---]]
-
-local function FORIN(vars,expr,body)
-  return FRAME(function(cont,env)
-    local kn,vn = table.unpack(vars)
-    env:pushVariable(kn,nil)
-    env:pushVariable(vn,nil)
-    expr(function(f,t,i)
-      local k,v = i,nil
-      local function loop()
-        k,v = f(t,k)
-        env:setVariable(kn,k)
-        env:setVariable(vn,v)
-        if not k then return cont(true) end
-        body(function() setTimeout(loop,0) end, env)
-      end
-      loop()
-    end,env)
-  end),{'forin',vars,expr,body}
 end
 
 comp['forin'] = function(expr)
@@ -855,7 +840,7 @@ end
 
 function compile(ast)
   if ast.type == 'block' then
-    return comp.block(ast,true)
+    return comp.block(ast,false)
   elseif ast.type == 'ruledef' then
     local head = ast.head
     local body = ast.body
@@ -864,8 +849,6 @@ function compile(ast)
     return IF(RULECHECK(h),b)
   else error("Not implemented:"..tostring(ast.type)) end
 end
-
-local function idfun() end
 
 local function eval(str,opts)
   assert(type(str) == "string","Expected string")

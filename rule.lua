@@ -65,8 +65,20 @@ local function flatten(t)
   end
 end
 
+local ruleGetVar = { id = true, src = true }
+local ruleSetFun = { name = true, enable = true, disable = true, start = true }
+local function ruleWrapper(rule)
+  return setmetatable({_rule = rule},{
+    __tostring = function(r) return tostring(rule) end,
+    __index = function(r,k)
+      if ruleGetVar[k] then return (rule or {})[k] elseif ruleSetFun[k] then return function(...) if rule then rule[k](rule,...) end return r end end
+    end,
+  })
+end
+
 local function createRule(expr, data, opts)
   local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src }
+  local timers = {}
   local opts = opts or {}
   opts = table.copyShallow(opts)
   opts.env = RuleEnv
@@ -74,6 +86,21 @@ local function createRule(expr, data, opts)
   if opts.started and type(opts.started) == 'boolean' then opts.started = started_rule end
   if opts.check and type(opts.check) == 'boolean' then opts.check = check_rule end
   if opts.result and type(opts.result) == 'boolean' then opts.result = result_rule end
+
+  local function rsetTimeout(f,t)
+    local ref
+    local function fun(...) 
+      local res = {pcall(f,...)} 
+      timers[ref] = nil
+      return table.unpack(res)
+    end
+    ref = setTimeout(fun,t)
+    return ref
+  end
+  local function rclearTimeout(ref) if timers[ref] then clearTimeout(ref) timers[ref] = nil end end
+  local function hook(ref) timers[ref] = nil end -- When posts are posted.
+  local function rpost(event,time) local ref = sourceTrigger:post(event,time,nil,hook) timers[ref] = true; return ref end
+  opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
 
   opts.cont = function(...) if opts.result then opts.result(self,...) end end
   opts.err = opts.err or function(str) ERROR("%s: %s", self, str) end
@@ -128,8 +155,8 @@ local function createRule(expr, data, opts)
   if opts.listTriggers then self:dumpTriggers() end
 
   local dailyTimers = {}
-  local function clearDailyTimers() for t,_ in ipairs(dailyTimers) do sourceTrigger:cancel(t) end; dailyTimers = {} end
-  
+  local function clearDailyTimers() for t,_ in ipairs(dailyTimers) do rclearTimeout(t) end; dailyTimers = {} end
+
   function self:setupDaily(start,skew)
     local skew = skew or 0
     clearDailyTimers()
@@ -146,9 +173,9 @@ local function createRule(expr, data, opts)
             if type(t) ~= 'number' then return self.env.error("Invalid daily time: "..tostring(t)) end
             if t < now+skew then 
               t = t + 24*3600
-              if catchFlag and start then setTimeout(function() self:start(dailyEvent) end,0) end -- Catch up, run immediately
+              if catchFlag and start then rsetTimeout(function() self:start(dailyEvent) end,0) end -- Catch up, run immediately
             end
-            dailyTimers[(sourceTrigger:post({type='Daily',id=self.id,time=fmt("%02d:%02d",torg//3600,torg%3600//60)},t-now))]=true
+            dailyTimers[rpost({type='Daily',id=self.id,time=fmt("%02d:%02d",torg//3600,torg%3600//60)},t-now)]=true
           end
         end
       end, self.env, table.unpack(self.daily))
@@ -157,7 +184,7 @@ local function createRule(expr, data, opts)
   
   local intervalTimer
   function self:setupInterval()
-    if intervalTimer then sourceTrigger:cancel(intervalTimer); intervalTimer = nil end
+    if intervalTimer then rclearTimeout(intervalTimer); intervalTimer = nil end
     if self.interval then
       self.interval(function(value)
         if type(value) ~= 'number' then return self.env.error("Invalid interval time: "..tostring(value)) end
@@ -167,14 +194,20 @@ local function createRule(expr, data, opts)
         local function loop()
           self:start(intervalEvent)
           nextTime = nextTime + value
-          intervalTimer = setTimeout(loop, (nextTime-os.time())*1000)
+          intervalTimer = rsetTimeout(loop, (nextTime-os.time())*1000)
         end
-        intervalTimer = setTimeout(loop, (nextTime-os.time())*1000)
+        intervalTimer = rsetTimeout(loop, (nextTime-os.time())*1000)
       end, self.env)
     end
   end
   
+  function self:clearTimers() for t,_ in pairs(timers) do rclearTimeout(t) end; timers = {} end
+
+  function self:enable() self.disabled = nil; self:setupDaily(false) self:setupInterval() end
+  function self:disable() self.disabled = true; self:clearTimers()end
+
   function self:start(event)
+    if self.disabled then return end
     if opts.started then opts.started(self,event) end
     local env = table.copyShallow(self.env)
     env.trigger = event
@@ -184,7 +217,7 @@ local function createRule(expr, data, opts)
 
   setmetatable(self, RuleMT)
   self.short = fmt("%s %s",self,self.src // 80):gsub("%s*\n%s*"," ")
-  return self
+  return ruleWrapper(self)
 end
 
 local function defRule(expr, opts)
@@ -214,10 +247,10 @@ local function defRule(expr, opts)
   end
 
   local rule = createRule(expr, env, opts)
-  rule:setupDaily(true)
-  rule:setupInterval()
-  Rules[#Rules+1] = rule
-  printf("✅ %s",rule.short)
+  rule._rule:setupDaily(true)
+  rule._rule:setupInterval()
+  Rules[#Rules+1] = rule._rule
+  printf("✅ %s",rule._rule.short)
   return rule
 end
 
@@ -409,7 +442,7 @@ function createER(qa)
   _er.loadSimDevice = ER.loadSimDev
   _er.eval = _er.rule -- alias
   setmetatable(_er,{
-    __tostring = function() return fmt("EventRunner6 v%s",version) end,
+    __tostring = function() return fmt("EventRunner6 v%s",VERSION) end,
   })
   return _er
 end

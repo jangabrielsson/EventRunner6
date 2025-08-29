@@ -6,7 +6,9 @@ local args = {}
 local builtin = {}
 ER.builtin = builtin
 
-function builtin.log(fm,...) if #{...} == 0 then if fm==nil then print() else print(fm) end else print(string.format(fm,...)) end end
+function builtin.log(fm,...) 
+  if #{...} == 0 then if fm==nil then print() else print(fm) end else print(string.format(fm,...)) end
+end
 
 function builtin.post(ev,time) return ER._er.post(ev,time) end
 function builtin.cancel(ref) return ER._er.cancel(ref) end
@@ -70,13 +72,13 @@ function ER.customDefs(er)
     if expr then -- test is true
       if not trueFor.ref then -- new, start timer
         trueFor.trigger = cb.env.trigger
-        trueFor.ref = setTimeout(function() trueFor.ref = nil; cb(true) end, time*1000)
+        trueFor.ref = cb.env:setTimeout(function() trueFor.ref = nil; cb(true) end, time*1000)
         return math.huge
       else -- already true and we have timer waiting
         cb(false) -- do nothing
       end
     elseif trueFor.ref then -- test is false, and we have timer
-      clearTimeout(trueFor.ref)
+      cb.env:clearTimeout(trueFor.ref)
       trueFor.ref = nil
       cb(false)
     else
@@ -92,7 +94,7 @@ function ER.customDefs(er)
       if trueFor.again == nil then trueFor.again,trueFor.againN = n,n end-- reset
       trueFor.again = trueFor.again - 1
       if trueFor.trigger and  trueFor.again > 0 then 
-        setTimeout(function() cb.env.rule:start(trueFor.trigger) end, 0)
+        cb.env:setTimeout(function() cb.env.rule:start(trueFor.trigger) end, 0)
         cb(trueFor.againN - trueFor.again)
       else trueFor.again = nil cb(trueFor.againN) end
     else cb(0) end
@@ -111,6 +113,11 @@ function ER.customDefs(er)
     return -1 -- not async
   end
   
+  function var.async.wait(cb,time)
+    cb.env:setTimeout(function() cb(true) end, time*1000)
+    return -1 -- not async
+  end
+
   local function makeDateFun(str,cache)
     if cache[str] then return cache[str] end
     local f = ER.dateTest(str)

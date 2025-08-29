@@ -41,7 +41,7 @@ ER._opers = {
 local keyword={
   ['if']='t_if',['then']='t_then',['else']='t_else',['elseif']='t_elseif',['end']='t_end',['while']='t_while',
   ['repeat']='t_repeat',['do']='t_do',['until']='t_until',['return']='t_return',['for']='t_for',['fun'..'ction']='t_function',
-  ['local']='t_local',['break']='t_break',['in']='t_in',
+  ['local']='t_local',['break']='t_break',['in']='t_in',['||']='t_||', ['>>']='t_>>',['case']='t_case',
   ['+=']='t_addinc',['-=']='t_subinc',['*=']='t_mulinc',['/=']='t_divinc',
   ['=>']='t_rule',
   ['true']='t_true',['false']='t_false',['nil']='t_nil',
@@ -394,6 +394,8 @@ local thenEnd = mapT{'t_end','t_else','t_elseif','t_eof'}
 local endEnd = mapT{'t_end','t_eof'}
 local braEnd = merge(mapT{'t_rbra','t_eof'},exprEnd)
 local incsMap = mapT{'t_addinc','t_subinc','t_mulinc','t_divinc'}
+local caseExpr = mapT{'t_>>'}
+local caseEnd = mapT{'t_end','t_||'}
 
 function stat(tkns)
   local pt = tkns.peek().type
@@ -402,7 +404,7 @@ function stat(tkns)
   if tkns.peek().type == 't_name' then 
     local n = tkns.matcht('t_name')
     local v = prefixexpr(tkns,{type='name',value=n.value,_dbg=n.dbg,vt=varType(n.value)})
-    if v.type=='call' then 
+    if v.type=='call' or v.type == 'objcall' then 
       return v   -- OK. functioncall
     elseif incsMap[tkns.peek().type]  then -- OK. var += exp
       --local v = tkns.matcht('t_name',"Expected variable name").value
@@ -461,6 +463,19 @@ function stat(tkns)
     tkns.matcht('t_end',"Expected END in IF statement")
     return {type='if', args=ifs,_dbg=pt.dbg}
   end
+
+  if tkns.matchpt('t_case') then -- OK. case ... end
+    local args = {}
+    while tkns.matchpt('t_||') do
+      local e = expr(tkns,caseExpr)
+      tkns.matcht('t_>>',"Expected >> after expression in CASE statement")
+      local b = block(tkns,caseEnd)
+      args[#args+1] = {cond=e,body=b}
+    end
+    tkns.matcht('t_end',"Expected END in CASE statement")
+    return {type='if', args=args,_dbg=pt.dbg}
+  end
+
   if tkns.matchpt('t_for') then
     if tkns.peek(2).opval == 'assign' then -- OK. for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end
     local name = tkns.matcht('t_name',"Expected loop variable name")

@@ -58,13 +58,17 @@ function QuickApp:main(er)
 
   -- rule("$$QV1 => log('QV1=%s',$$QV1)")
   -- rule("$$QV1 = true; log('OKOK')")
-  rule("c = 0")
-  rule("@x => c += 1; if c > 2 then x = 11:00 end; log('TIME %s',HM(now))")
+  -- rule("c = 0")
+  -- rule("@x => c += 1; if c > 2 then x = 11:00 end; log('TIME %s',HM(now))")
+  -- rule("local a = 9; b = 8")
+  -- rule("log(a); log('ok %s',b)")
+  var.r1 = rule("@@00:00:03 => log('ok')")
+  rule("wait(00:00:10); r1:disable()")
 end
 
 function QuickApp:onInit()
   local er = fibaro.EventRunner(self)
   self:debug(er)
-  er.speed(4*24)
-  --er.start()
+  --er.speed(4*24)
+  er.start()
 end
