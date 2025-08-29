@@ -4,47 +4,67 @@ EventScript is the rule-based automation language used by EventRunner6 for creat
 
 ## Table of Contents
 
-1. [Language Overview](#language-overview)
-2. [Basic Syntax](#basic-syntax)
-3. [Control Structures](#control-structures)
-   - [Conditional Statements](#conditional-statements)
-   - [Loop Statements](#loop-statements)
-4. [Assignment](#assignment)
-   - [Simple Assignment](#simple-assignment)
-   - [Multiple Assignment](#multiple-assignment)
-5. [Tables](#tables)
-   - [Table Creation](#table-creation)
-   - [Table Access](#table-access)
-6. [Expressions](#expressions)
-   - [Variables](#variables)
-   - [Constants](#constants)
-   - [Operators](#operators)
-7. [Triggers](#triggers)
-   - [Daily Triggers](#daily-triggers)
-   - [Interval Triggers](#interval-triggers)
-   - [Event Triggers](#event-triggers)
-   - [Device Triggers](#device-triggers)
-   - [Trigger Variables](#trigger-variables)
-8. [Functions](#functions)
-   - [trueFor Function](#truefor-function)
-   - [Date Functions](#date-functions)
-   - [Log and Formatting Functions](#log-and-formatting-functions)
-   - [Event Functions](#event-functions)
-   - [Math Functions](#math-functions)
-   - [Global Variable Functions](#global-variable-functions)
-   - [Table Functions](#table-functions)
-   - [Rule Functions](#rule-functions)
-9. [Property Functions](#property-functions)
-   - [Device Properties](#device-properties)
-   - [Device Control Actions](#device-control-actions)
-   - [Device Assignment Properties](#device-assignment-properties)
-   - [Partition Properties](#partition-properties)
-   - [Thermostat Properties](#thermostat-properties)
-   - [Scene Properties](#scene-properties)
-   - [Information Properties](#information-properties)
-   - [List Operations](#list-operations)
-10. [Examples](#examples)
-11. [Best Practices](#best-practices)
+- [EventScript Language Documentation](#eventscript-language-documentation)
+  - [Table of Contents](#table-of-contents)
+  - [Language Overview](#language-overview)
+  - [Basic Syntax](#basic-syntax)
+  - [Control Structures](#control-structures)
+    - [Conditional Statements](#conditional-statements)
+    - [Loop Statements](#loop-statements)
+  - [Assignment](#assignment)
+    - [Simple Assignment](#simple-assignment)
+    - [Multiple Assignment](#multiple-assignment)
+  - [Tables](#tables)
+    - [Table Creation](#table-creation)
+    - [Table Access](#table-access)
+  - [Expressions](#expressions)
+    - [Variables](#variables)
+      - [Variable Declaration](#variable-declaration)
+      - [Variable Resolution Order](#variable-resolution-order)
+      - [Variable Assignment](#variable-assignment)
+    - [Constants](#constants)
+      - [Time Constants](#time-constants)
+      - [Time Representation](#time-representation)
+      - [Predefined Constants](#predefined-constants)
+    - [Operators](#operators)
+      - [Logical Operators](#logical-operators)
+      - [Arithmetic Operators](#arithmetic-operators)
+      - [Comparison Operators](#comparison-operators)
+      - [Assignment Operators](#assignment-operators)
+      - [Coalesce Operator](#coalesce-operator)
+    - [Daily Triggers](#daily-triggers)
+    - [Interval Triggers](#interval-triggers)
+    - [Event Triggers](#event-triggers)
+    - [Device Triggers](#device-triggers)
+    - [Trigger Variables](#trigger-variables)
+  - [Functions](#functions)
+    - [trueFor Function](#truefor-function)
+    - [Date Functions](#date-functions)
+      - [Day Testing Functions](#day-testing-functions)
+      - [Time Range Testing](#time-range-testing)
+    - [Log and Formatting Functions](#log-and-formatting-functions)
+    - [Event Functions](#event-functions)
+    - [Math Functions](#math-functions)
+    - [Global Variable Functions](#global-variable-functions)
+    - [Table Functions](#table-functions)
+    - [Rule Functions](#rule-functions)
+  - [Property Functions](#property-functions)
+    - [Device Properties](#device-properties)
+    - [Device Control Actions](#device-control-actions)
+    - [Device Assignment Properties](#device-assignment-properties)
+    - [Partition Properties](#partition-properties)
+    - [Thermostat Properties](#thermostat-properties)
+    - [Scene Properties](#scene-properties)
+    - [Information Properties](#information-properties)
+    - [List Operations](#list-operations)
+  - [Examples](#examples)
+    - [Basic Device Control](#basic-device-control)
+    - [Conditional Logic](#conditional-logic)
+    - [Time-based Automation](#time-based-automation)
+    - [List Operations](#list-operations-1)
+    - [Advanced Scenarios](#advanced-scenarios)
+  - [Rule management functions](#rule-management-functions)
+  - [Best Practices](#best-practices)
 
 ## Language Overview
 
@@ -341,6 +361,11 @@ EventScript supports various operators for building complex expressions.
 | `*=` | Multiply and assign | `scale *= factor` |
 | `/=` | Divide and assign | `average /= count` |
 
+#### Coalesce Operator
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `??` | Assign if not nil | `counter = a ??` 7 |
+
 **Examples:**
 ```lua
 rule("temp:value > 25 & humidity < 60 => fan:on")
@@ -621,6 +646,8 @@ Property functions use the syntax `<ID>:<property>` for reading and `<ID>:<prope
 | `volume` | Trigger | Audio volume level |
 | `position` | Trigger | Device position (blinds, etc.) |
 | `temp` | Trigger | Temperature value |
+| `scene` | Trigger | Scene activation event value |
+| `central` | Trigger | Central scene event, {keyId=.., keyAttribute=...} |
 
 ### Device Control Actions
 
@@ -699,7 +726,6 @@ Property functions use the syntax `<ID>:<property>` for reading and `<ID>:<prope
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `scene` | Trigger | Scene activation event |
 | `start` | Action | Start/execute scene |
 | `kill` | Action | Stop scene execution |
 
@@ -772,6 +798,21 @@ rule("trueFor(01:00, room:isAllOff) => hvac:targetLevel=18")
 
 -- Weather-based automation
 rule("weatherStation:temp < 0 & @06:00 => carHeater:on")
+```
+
+## Rule management functions
+
+Defining a rules returns a rule object, that has methods for managing and controling the rule
+```lua
+local r = rule("triggerExpression => actions")
+
+r:disable() -- disables the rule and stops all timers started by the rule
+
+r:enable() -- enables the rule. A daily or interval rule will start to run
+
+r:start() -- trigger the rule manually
+
+r:info() -- logs info about the rule
 ```
 
 ## Best Practices

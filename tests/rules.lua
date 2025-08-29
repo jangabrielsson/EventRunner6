@@ -65,9 +65,20 @@ function QuickApp:main(er)
   -- rule("log(a); log('ok %s',b)")
   -- var.r1 = rule("@@00:00:03 => log('ok')")
   -- rule("wait(00:00:10); r1:disable()")
-  function encode(t) return json.encode(t) end
-  rule("HT.remote:central => log('OK %s',json.encode(HT.remote:central))")
-  rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
+
+  function var.click(id,val) 
+    api.post("/plugins/publishEvent",{
+      type = "SceneActivationEvent", 
+      source = id,
+      data = { sceneId = val }
+  })
+  end
+
+  -- rule("HT.remote:central => log('OK %s',json.encode(HT.remote:central))")
+  -- rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
+
+  rule("HT.remote:scene==S1.click => log('S1 click %s',HT.remote:scene)")
+  rule("click(HT.remote,S1.click)")
 end
 
 function QuickApp:onInit()
