@@ -1,4 +1,4 @@
-local version = "1.0.0"
+local VERSION = "0.0.1"
 
 fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner
@@ -415,6 +415,6 @@ function createER(qa)
 end
 
 setmetatable(ER,{
-  __tostring = function() return fmt("EventRunner6 v%s",version) end,
+  __tostring = function() return fmt("EventRunner6 v%s",VERSION) end,
   __call = function(_,qa) return createER(qa) end
 })
