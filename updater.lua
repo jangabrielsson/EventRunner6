@@ -9,7 +9,7 @@
 --%%u:{label='sel', text=''}
 --%%u:{{button='upd', text="Update", onReleased='updateClicked'},{button='ref', text="Refresh", onReleased='refreshClicked'}}
 
-local VERSION = "0.0.2"
+local VERSION = "0.0.3"
 local ER_UUID = "f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c"
 local fmt = string.format
 
