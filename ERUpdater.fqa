@@ -1,1 +1,126 @@
-{"initialProperties":{"useEmbededView":true,"uiView":[{"type":"horizontal","style":{"weight":"1.0"},"components":[{"type":"label","name":"l1","style":{"weight":"1.0"},"visible":true,"text":"ER Updater"}]},{"type":"horizontal","style":{"weight":"1.0"},"components":[{"selectionType":"single","values":{},"name":"version","eventBinding":{"onToggled":[{"params":{"actionName":"UIAction","args":["onToggled","version","$event.value"]},"type":"deviceAction"}]},"value":"","type":"select","text":"","visible":true,"options":{},"style":{"weight":"1.0"}}]},{"type":"horizontal","style":{"weight":"1.0"},"components":[{"selectionType":"single","values":{},"name":"qa","eventBinding":{"onToggled":[{"params":{"actionName":"UIAction","args":["onToggled","qa","$event.value"]},"type":"deviceAction"}]},"value":"","type":"select","text":"","visible":true,"options":{},"style":{"weight":"1.0"}}]},{"type":"horizontal","style":{"weight":"1.0"},"components":[{"type":"label","name":"sel","style":{"weight":"1.0"},"visible":true,"text":""}]},{"type":"horizontal","style":{"weight":"1.0"},"components":[{"type":"button","name":"upd","eventBinding":{"onReleased":[{"params":{"actionName":"UIAction","args":["onReleased","upd"]},"type":"deviceAction"}],"onLongPressReleased":[{"params":{"actionName":"UIAction","args":["onLongPressReleased","upd"]},"type":"deviceAction"}],"onLongPressDown":[{"params":{"actionName":"UIAction","args":["onLongPressDown","upd"]},"type":"deviceAction"}]},"style":{"weight":"0.5"},"visible":true,"text":"Update"},{"type":"button","name":"ref","eventBinding":{"onReleased":[{"params":{"actionName":"UIAction","args":["onReleased","ref"]},"type":"deviceAction"}],"onLongPressReleased":[{"params":{"actionName":"UIAction","args":["onLongPressReleased","ref"]},"type":"deviceAction"}],"onLongPressDown":[{"params":{"actionName":"UIAction","args":["onLongPressDown","ref"]},"type":"deviceAction"}]},"style":{"weight":"0.5"},"visible":true,"text":"Refresh"}]}],"quickAppUuid":"f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c","quickAppVariables":{},"uiCallbacks":[{"eventType":"onToggled","callback":"versionSelected","name":"version"},{"eventType":"onToggled","callback":"qaSelected","name":"qa"},{"eventType":"onReleased","callback":"updateClicked","name":"upd"},{"eventType":"onLongPressDown","callback":"","name":"upd"},{"eventType":"onLongPressReleased","callback":"","name":"upd"},{"eventType":"onReleased","callback":"refreshClicked","name":"ref"},{"eventType":"onLongPressDown","callback":"","name":"ref"},{"eventType":"onLongPressReleased","callback":"","name":"ref"}],"deviceRole":"Other","typeTemplateInitialized":true,"userDescription":"","buildNumber":1,"apiVersion":"1.3","useUiView":true,"viewLayout":{"$jason":{"body":{"sections":{"items":[{"type":"vertical","style":{"weight":"1.2"},"components":[{"text":"ER Updater","style":{"weight":"1.2"},"type":"label","visible":true,"name":"l1"},{"type":"space","style":{"weight":"0.5"}}]},{"type":"vertical","style":{"weight":"1.2"},"components":[{"text":"","style":{"weight":"1.2"},"selectionType":"single","values":{},"type":"select","visible":true,"options":{},"name":"version"},{"type":"space","style":{"weight":"0.5"}}]},{"type":"vertical","style":{"weight":"1.2"},"components":[{"text":"","style":{"weight":"1.2"},"selectionType":"single","values":{},"type":"select","visible":true,"options":{},"name":"qa"},{"type":"space","style":{"weight":"0.5"}}]},{"type":"vertical","style":{"weight":"1.2"},"components":[{"text":"","style":{"weight":"1.2"},"type":"label","visible":true,"name":"sel"},{"type":"space","style":{"weight":"0.5"}}]},{"type":"vertical","style":{"weight":"1.2"},"components":[{"type":"horizontal","style":{"weight":"1.2"},"components":[{"text":"Update","style":{"weight":"0.50"},"type":"button","visible":true,"name":"upd"},{"text":"Refresh","style":{"weight":"0.50"},"type":"button","visible":true,"name":"ref"}]},{"type":"space","style":{"weight":"0.5"}}]}]},"header":{"title":"quickApp_device_52","style":{"height":"0"}}},"head":{"title":"quickApp_device_52"}}},"supportedDeviceRoles":["Other"]},"apiVersion":"1.3","type":"com.fibaro.genericDevice","initialInterfaces":{},"files":[{"isOpen":false,"isMain":true,"type":"lua","content":"--%%name:ERUpdater\n--%%type:com.fibaro.genericDevice\n--%%desktop:true\n--%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c\n--%%save:ERUpdater.fqa\n--%%u:{label='l1', text=\"ER Updater\"}\n--%%u:{select='version', options={}, onToggled='versionSelected'}\n--%%u:{select='qa', options={}, onToggled='qaSelected'}\n--%%u:{label='sel', text=''}\n--%%u:{{button='upd', text=\"Update\", onReleased='updateClicked'},{button='ref', text=\"Refresh\", onReleased='refreshClicked'}}\n\nlocal ER_UUID = \"f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c\"\nlocal fmt = string.format\n\nfunction QuickApp:onInit()\n  self:debug(self.name,self.id)\n  self:updateView('sel',\"text\",\"\")\n  setInterval(function() self:refreshClicked() end, 60*60*1000)\n  self:refreshClicked()\nend\n\nfunction QuickApp:refreshClicked()\n  local res = api.get(\"/devices?property=[quickAppUuid,\"..ER_UUID..\"]\") or {}\n  local ers = {{type='option', text=\"---\", value=\"\"}}\n  for _,q in ipairs(res) do ers[#ers+1] = {type='option', text=fmt(\"%s: %s\",q.id,q.name),value=tostring(q.id)} end\n  self:updateView('qa','options',ers)\n  self:git_getQATags('jangabrielsson','EventRunner6',function(ok,data)\n    local vers = {{type'option', text=\"---\", value=\"\"}}\n    if ok then\n      local tags = json.decode(data)\n      for _,t in ipairs(tags) do \n        vers[#vers+1] = {type='option', text=t.name, value=t.name} \n      end\n    end\n    self:updateView('version','options',vers)\n  end)\nend\n\nlocal qa,version = nil,nil\nfunction QuickApp:versionSelected(ev)\n  version = ev.values[1]\n  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qa or \"?\",version or \"?\"))\nend\n\nfunction QuickApp:qaSelected(ev)\n  qa = tonumber(ev.values[1])\n  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qa or \"?\",version or \"?\"))\nend\n\nfunction QuickApp:updateClicked(ev)\n  if not qa or not version then\n    self:ERROR(\"Please select both EventRunner6 and version\")\n    return\n  end\n  self:updateMe(qa, nil, version)\nend\n\nfunction QuickApp:INFO(...) self:debug(fmt(...)) end\nfunction QuickApp:ERROR(...) self:error(fmt(...)) end\n\nfunction QuickApp:updateMe(id, myVersion, toVersion)\n  local id = tonumber(id)\n  if id == nil then\n    self:error(\"No valid EventRunner6 ID\")\n    return\n  end\n  self:git_getQA('jangabrielsson','EventRunner6',\"EventRunner6.fqa\",toVersion,function(ok,data)\n    if ok then\n      self:INFO(\"Found version v%s\", toVersion)\n      local fqa = json.decode(data)\n      local files,main = fqa.files,nil\n      for i,f in ipairs(files) do if f.isMain then main = i break end end\n      if not main then\n        self:ERROR(\"No main file found in EventRunner6 v%s\",toVersion)\n        return\n      end\n      table.remove(files,main) -- skip main\n      local res,code = api.put(\"/quickApp/\"..id..\"/files\", files)\n      if code > 202 then \n        self:ERROR(\"Failed to update EventRunner6 v%s files\",toVersion)\n        return\n      end\n      self:INFO(\"Updated %d files\",#files)\n    else\n      self:ERROR(\"Failed to get EventRunner6 v%s\",toVersion)\n      -- Send error response\n    end\n  end)\nend\n\nfunction QuickApp:git_getQA(user,repo,name,tag,cb)\n  local url = urlencode(fmt(\"%s/%s/%s/%s\",user,repo,tag,name))\n  url = \"https://raw.githubusercontent.com/\"..url\n  net.HTTPClient():request(url,{\n    options = {checkCertificate = false, timeout=20000},\n    success = function(response)\n      if response and response.status == 200 then\n        cb(true,response.data)\n      else cb(false,response and response.status or \"nil\") end\n    end,\n    error = function(err) cb(false,err) end\n  })\nend\n\nfunction QuickApp:git_getQATags(user,repo,cb)\n  local url = fmt(\"https://api.github.com/repos/%s/%s/tags\",user,repo)\n  net.HTTPClient():request(url,{\n    options = {checkCertificate = false, timeout=20000},\n    success = function(response)\n      if response and response.status == 200 then\n        cb(true,response.data)\n      else cb(false,response and response.status or \"nil\") end\n    end,\n    error = function(err) cb(false,err) end\n  })\nend\n\nfunction urlencode(str) -- very useful\n  if str then\n    str = str:gsub(\"\\n\", \"\\r\\n\")\n    str = str:gsub(\"([^%w %-%_%.%~])\", function(c) return (\"%%%02X\"):format(string.byte(c)) end)\n    str = str:gsub(\" \", \"%%20\")\n  end\n  return str\nend","name":"main"}],"name":"ERUpdater"}
+{"type":"com.fibaro.genericDevice","name":"ERUpdater","apiVersion":"1.3","files":[{"type":"lua","name":"main","content":"--%%name:ERUpdater
+--%%type:com.fibaro.genericDevice
+--%%desktop:true
+--%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c
+--%%save:ERUpdater.fqa
+--%%u:{label='l1', text=\"ER Updater\"}
+--%%u:{select='version', options={}, onToggled='versionSelected'}
+--%%u:{select='qa', options={}, onToggled='qaSelected'}
+--%%u:{label='sel', text=''}
+--%%u:{{button='upd', text=\"Update\", onReleased='updateClicked'},{button='ref', text=\"Refresh\", onReleased='refreshClicked'}}
+
+local VERSION = \"0.0.2\"
+local ER_UUID = \"f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c\"
+local fmt = string.format
+
+function QuickApp:onInit()
+  self:debug(self.name,self.id)
+  self:updateView('sel',\"text\",\"\")
+  setInterval(function() self:refreshClicked() end, 60*60*1000) -- Refresh every hour
+  self:refreshClicked()
+end
+
+function QuickApp:refreshClicked()
+  local res = api.get(\"/devices?property=[quickAppUuid,\"..ER_UUID..\"]\") or {}
+  local ers = {{type='option', text=\"---\", value=\"\"}}
+  for _,q in ipairs(res) do ers[#ers+1] = {type='option', text=fmt(\"%s: %s\",q.id,q.name),value=tostring(q.id)} end
+  self:updateView('qa','options',ers)
+  self:git_getQATags('jangabrielsson','EventRunner6',function(ok,data)
+    local vers = {{type'option', text=\"---\", value=\"\"}}
+    if ok then
+      local tags = json.decode(data)
+      for _,t in ipairs(tags) do 
+        vers[#vers+1] = {type='option', text=t.name, value=t.name} 
+      end
+    end
+    self:updateView('version','options',vers)
+  end)
+end
+
+local qa,version = nil,nil
+function QuickApp:versionSelected(ev)
+  version = ev.values[1]
+  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qa or \"?\",version or \"?\"))
+end
+
+function QuickApp:qaSelected(ev)
+  qa = tonumber(ev.values[1])
+  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qa or \"?\",version or \"?\"))
+end
+
+function QuickApp:updateClicked(ev)
+  if not qa or not version then
+    self:ERROR(\"Please select both EventRunner6 and version\")
+    return
+  end
+  self:updateMe(qa, nil, version)
+end
+
+function QuickApp:INFO(...) self:debug(fmt(...)) end
+function QuickApp:ERROR(...) self:error(fmt(...)) end
+
+function QuickApp:updateMe(id, myVersion, toVersion)
+  local id = tonumber(id)
+  if id == nil then
+    self:error(\"No valid EventRunner6 ID\")
+    return
+  end
+  self:git_getQA('jangabrielsson','EventRunner6',\"EventRunner6.fqa\",toVersion,function(ok,data)
+    if ok then
+      self:INFO(\"Found version v%s\", toVersion)
+      local fqa = json.decode(data)
+      local files,main = fqa.files,nil
+      for i,f in ipairs(files) do if f.isMain then main = i break end end
+      if not main then
+        self:ERROR(\"No main file found in EventRunner6 v%s\",toVersion)
+        return
+      end
+      table.remove(files,main) -- skip main
+      local res,code = api.put(\"/quickApp/\"..id..\"/files\", files)
+      if code > 202 then 
+        self:ERROR(\"Failed to update EventRunner6 v%s files\",toVersion)
+        return
+      end
+      self:INFO(\"Updated %d files\",#files)
+    else
+      self:ERROR(\"Failed to get EventRunner6 v%s\",toVersion)
+      -- Send error response
+    end
+  end)
+end
+
+function QuickApp:git_getQA(user,repo,name,tag,cb)
+  local url = urlencode(fmt(\"%s/%s/%s/%s\",user,repo,tag,name))
+  url = \"https://raw.githubusercontent.com/\"..url
+  net.HTTPClient():request(url,{
+    options = {checkCertificate = false, timeout=20000},
+    success = function(response)
+      if response and response.status == 200 then
+        cb(true,response.data)
+      else cb(false,response and response.status or \"nil\") end
+    end,
+    error = function(err) cb(false,err) end
+  })
+end
+
+function QuickApp:git_getQATags(user,repo,cb)
+  local url = fmt(\"https://api.github.com/repos/%s/%s/tags\",user,repo)
+  net.HTTPClient():request(url,{
+    options = {checkCertificate = false, timeout=20000},
+    success = function(response)
+      if response and response.status == 200 then
+        cb(true,response.data)
+      else cb(false,response and response.status or \"nil\") end
+    end,
+    error = function(err) cb(false,err) end
+  })
+end
+
+function urlencode(str) -- very useful
+  if str then
+    str = str:gsub(\"\\n\", \"\\r\\n\")
+    str = str:gsub(\"([^%w %-%_%.%~])\", function(c) return (\"%%%02X\"):format(string.byte(c)) end)
+    str = str:gsub(\" \", \"%%20\")
+  end
+  return str
+end","isMain":true,"isOpen":false}],"initialInterfaces":[],"initialProperties":{"apiVersion":"1.3","buildNumber":1,"deviceRole":"Other","quickAppVariables":[],"supportedDeviceRoles":["Other"],"typeTemplateInitialized":true,"uiCallbacks":[{"name":"version","callback":"versionSelected","eventType":"onToggled"},{"name":"qa","callback":"qaSelected","eventType":"onToggled"},{"name":"upd","callback":"updateClicked","eventType":"onReleased"},{"name":"upd","callback":"","eventType":"onLongPressDown"},{"name":"upd","callback":"","eventType":"onLongPressReleased"},{"name":"ref","callback":"refreshClicked","eventType":"onReleased"},{"name":"ref","callback":"","eventType":"onLongPressDown"},{"name":"ref","callback":"","eventType":"onLongPressReleased"}],"uiView":[{"type":"horizontal","components":[{"type":"label","name":"l1","style":{"weight":"1.0"},"text":"ER Updater","visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"select","name":"version","value":"","eventBinding":{"onToggled":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onToggled","version","$event.value"]}}]},"options":[],"selectionType":"single","style":{"weight":"1.0"},"text":"","values":[],"visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"select","name":"qa","value":"","eventBinding":{"onToggled":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onToggled","qa","$event.value"]}}]},"options":[],"selectionType":"single","style":{"weight":"1.0"},"text":"","values":[],"visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"label","name":"sel","style":{"weight":"1.0"},"text":"","visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"button","name":"upd","eventBinding":{"onLongPressDown":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressDown","upd"]}}],"onLongPressReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressReleased","upd"]}}],"onReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onReleased","upd"]}}]},"style":{"weight":"0.5"},"text":"Update","visible":true},{"type":"button","name":"ref","eventBinding":{"onLongPressDown":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressDown","ref"]}}],"onLongPressReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressReleased","ref"]}}],"onReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onReleased","ref"]}}]},"style":{"weight":"0.5"},"text":"Refresh","visible":true}],"style":{"weight":"1.0"}}],"useEmbededView":true,"useUiView":true,"userDescription":"","viewLayout":{"$jason":{"body":{"header":{"style":{"height":"0"},"title":"quickApp_device_52"},"sections":{"items":[{"type":"vertical","components":[{"type":"label","name":"l1","style":{"weight":"1.2"},"text":"ER Updater","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"select","name":"version","options":[],"selectionType":"single","style":{"weight":"1.2"},"text":"","values":[],"visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"select","name":"qa","options":[],"selectionType":"single","style":{"weight":"1.2"},"text":"","values":[],"visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"label","name":"sel","style":{"weight":"1.2"},"text":"","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"horizontal","components":[{"type":"button","name":"upd","style":{"weight":"0.50"},"text":"Update","visible":true},{"type":"button","name":"ref","style":{"weight":"0.50"},"text":"Refresh","visible":true}],"style":{"weight":"1.2"}},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}}]}},"head":{"title":"quickApp_device_52"}}}}}
