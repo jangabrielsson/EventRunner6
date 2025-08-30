@@ -14,6 +14,7 @@ local catch = math.huge
 local idFun = function() end
 ER.rules = Rules
 
+local function Event(ev) return setmetatable(ev, ER.EventMT) end
 local function INFO(...) fibaro.debug(__TAG,fmt(...)) end
 local function ERROR(...) fibaro.error(__TAG,fmt(...)) end
 local function WARNING(...) fibaro.warning(__TAG,fmt(...)) end
@@ -26,6 +27,7 @@ local emoji = {
   clapper_board = "🎬",
   start_flag = "🚦",
   stop_flag = "🛑",
+  red_cross = "❌",
   checkered_flag = "🏁",
   no_entry = "⛔",
   thumbs_up = "👍",
@@ -222,7 +224,7 @@ end
 
 local function defRule(expr, opts)
   local head = expr.__doc[2]
-  
+  local src = opts.src
   local id = #Rules+1
   local env = ER.createEnv(idFun,idFun,opts)
   for k,v in pairs({
@@ -230,7 +232,7 @@ local function defRule(expr, opts)
     triggers = {},
     daily = nil,
     interval = nil,
-    error = function(str) print(fmt("Error in rule %d: %s", id, str)) os.exit() end,
+    error = function(str) ERROR("❌ Rule %d: %s '%s'", id, str, src:gsub("%s*\n%s*"," ") // 80) os.exit() end,
   }) do env[k] = v end
   
   local function cont()
@@ -240,7 +242,7 @@ local function defRule(expr, opts)
   findTriggers(head, cont, env)
 
   if env.interval and env.daily then return env.error("Only one @daily or @@interval per rule") end
-  if env.daily then table.insert(env.triggers,{type='Daily',id=env.id}) end
+  if env.daily then table.insert(env.triggers,Event({type='Daily',id=env.id})) end
   
   if env.interval == nil and env.daily == nil and #env.triggers == 0 then
     return env.error("Rule has no triggers")
@@ -286,7 +288,7 @@ function findTriggers(c, cont, env, df)
       df = true
     elseif op == 'interv' then
       if env.interval then env.error("Only one @interv per rule") end
-      table.insert(env.triggers,{type='Interval',id=env.id})
+      table.insert(env.triggers,Event({type='Interval',id=env.id}))
       env.interval = arg 
     end
     scanArg(cont, env, df, arg)
@@ -300,10 +302,10 @@ function findTriggers(c, cont, env, df)
     local obj = earg(c,2)
     obj(function(value)
       if tonumber(value) then
-        table.insert(env.triggers,{type=pv[1],id=value,property=pv[3]})
+        table.insert(env.triggers,Event({type=pv[1],id=value,property=pv[3]}))
       elseif type(value) == 'table' then
         for _,id in ipairs(value) do
-          table.insert(env.triggers,{type=pv[1],id=id,property=pv[3]})
+          table.insert(env.triggers,Event({type=pv[1],id=id,property=pv[3]}))
         end
       else
         env.error("Invalid object in getprop trigger: "..json.encodeFast(value))
@@ -317,7 +319,7 @@ function findTriggers(c, cont, env, df)
         if not env.trigger then return cont(false) end
         cont(table.equal(env.trigger,t))
       end
-      table.insert(env.triggers,t)
+      table.insert(env.triggers,Event(t))
     end
     cont()
   elseif typ == 'table' then
@@ -343,14 +345,16 @@ function findTriggers(c, cont, env, df)
   elseif typ == 'var' then
     local name = earg(c,1)
     if ER.triggerVars[name] then
-      table.insert(env.triggers,{type='trigger-variable',name=name, _df=df})
+      table.insert(env.triggers,Event({type='trigger-variable',name=name, _df=df}))
     end
   elseif typ == 'gvar' then
     local name = earg(c,1)
-    table.insert(env.triggers,{type='global-variable',name=name, _df=df})
+    table.insert(env.triggers,Event({type='global-variable',name=name, _df=df}))
   elseif typ == 'qvar' then
     local name = earg(c,1)
-    table.insert(env.triggers,{type='quickvar',id=quickApp.id,name=name, _df=df})
+    table.insert(env.triggers,Event({type='quickvar',id=quickApp.id,name=name, _df=df}))
+  elseif typ == 'aref' then
+    scanArg(cont, env, df, eargs(c))
   else
     print("Unsupported trigger type:", etype(c), json.encodeFast(c))
   end

@@ -77,8 +77,10 @@ function QuickApp:main(er)
   -- rule("HT.remote:central => log('OK %s',json.encode(HT.remote:central))")
   -- rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
 
-  rule("HT.remote:scene==S1.click => log('S1 click %s',HT.remote:scene)")
-  rule("click(HT.remote,S1.click)")
+  -- rule("HT.remote:scene==S1.click => log('S1 click %s',HT.remote:scene)")
+  -- rule("click(HT.remote,S1.click)")
+
+  rule("@now+1 => return a>'h'")
 end
 
 function QuickApp:onInit()

@@ -133,6 +133,8 @@ function ER.customDefs(er)
   
   var.S1 = {click = "16", double = "14", tripple = "15", hold = "12", release = "13"}
   var.S2 = {click = "26", double = "24", tripple = "25", hold = "22", release = "23"}
+
+  var.QA = er.qa
   
 end
 

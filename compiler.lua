@@ -1,6 +1,7 @@
 fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner
 local debugFlags = ER.debugFlags
+local isHead,currentSrc = false,"" 
 
 local fmt = string.format
 local function idfun() end
@@ -269,33 +270,33 @@ local function TABLE(args)
   end, {'table', args})
 end
 
-local function checkArgs(a,t1,b,t2,env)
-  if type(a) ~= t1 then env.error("Expected "..t1..", got: "..tostring(a)) end
-  if type(b) ~= t2 then env.error("Expected "..t2..", got: "..tostring(b)) end
+local function checkArgs(a,t1,b,t2,env,e1,e2)
+  if type(a) ~= t1 then env.error(fmt("%s: Expected %s, got: %s",e1,t1,a))  end
+  if type(b) ~= t2 then env.error(fmt("%s: Expected %s, got: %s",e2,t2,b))  end
 end
 
 local opFuns = {
-  ['add'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a + b end,
-  ['sub'] = function(a,b,env) checkArgs(a,'number',b,'number',env)return a - b end,
-  ['mul'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a * b end,
-  ['div'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a / b end,
-  ['mod'] = function(a,b,env) checkArgs(a,'number',b,'number',env )return a % b end,
-  ['pow'] = function(a,b,env) checkArgs(a,'number',b,'number',env) return a ^ b end,
-  ['eq'] = function(a,b,env) return a == b end,
-  ['neq'] = function(a,b,env) return a ~= b end,
-  ['lt'] = function(a,b,env) return a < b end,
-  ['lte'] = function(a,b,env) return a <= b end,
-  ['gt'] = function(a,b,env) return a > b end,
-  ['gte'] = function(a,b,env) return a >= b end,
-  ['betw'] = function(a,b,env) 
-    checkArgs(a,'number',b,'number',env) 
+  ['add'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a + b end,
+  ['sub'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a - b end,
+  ['mul'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a * b end,
+  ['div'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a / b end,
+  ['mod'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a % b end,
+  ['pow'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a ^ b end,
+  ['eq'] = function(a,b,env,e1,e2) return a == b end,
+  ['neq'] = function(a,b,env,e1,e2) return a ~= b end,
+  ['lt'] = function(a,b,env,e1,e2) return a < b end,
+  ['lte'] = function(a,b,env,e1,e2) return a <= b end,
+  ['gt'] = function(a,b,env,e1,e2) return a > b end,
+  ['gte'] = function(a,b,env,e1,e2) return a >= b end,
+  ['betw'] = function(a,b,env,e1,e2)
+    checkArgs(a,'number',b,'number',env,e1,e2)
     local ts = os.date("*t")
     local t = ts.hour*3600 + ts.min*60 + ts.sec
     b = b >= a and b or b + 24*3600
     t = t >= a and t or t + 24*3600
     return a <= t and t <= b
   end,
-  ['nilco'] = function(a,b,env) if a ~= nil then return a else return b end end,
+  ['nilco'] = function(a,b,env,e1,e2) if a ~= nil then return a else return b end end,
 }
 
 local function BINOP(op,exp1,exp2)
@@ -303,8 +304,13 @@ local function BINOP(op,exp1,exp2)
     exp1(function(v1)
       exp2(function(v2)
         if opFuns[op] then
-          local res = opFuns[op](v1, v2, env)
-          cont(res)
+          local stat,err = pcall(function()
+            local res = opFuns[op](v1, v2, env, exp1, exp2)
+            cont(res)
+          end)
+          if not stat then
+            env.error(fmt("%s: %s %s %s",err:match("%d+:%s*(.*)") or err, op, exp1, exp2))
+          end
         else
           env.error("Unknown operator: " .. tostring(op))
         end
@@ -607,19 +613,31 @@ end
 
 local funs = {
   IF = IF,
+  IFA = IFA,
   AND = AND,
   OR = OR,
+  WHILE = WHILE,
+  REPEAT = REPEAT,
+  FORIN = FORIN,
+  LOOP = LOOP,
   PROGN = PROGN,
   CONST = CONST,
   AREF = AREF,
   BINOP = BINOP,
   UNOP = UNOP,
   CALL = CALL,
+  CALLOBJ = CALLOBJ,
   GETPROP = GETPROP,
-  EXPR = EXPR,
   FUNC = FUNC,
+  EXPR = EXPR,
   RULE = RULE
 }
+
+local function compError(str,expr) 
+  local dbg = expr._dbg or { to = 1, from = 1}
+  local from,to = dbg.from,dbg.to
+  ER.perror('Compiler',str,from,to,currentSrc,nil)
+end
 
 local compa, comp = function(_) end, {}
 
@@ -650,6 +668,7 @@ function comp.block(expr,noframe)
 end
 
 function comp.binop(expr)
+  if expr.op == 'assign' then compError(fmt("'assign' not allowed in%s expression",(isHead and " trigger" or "")),expr) end
   local exp1 = compa(expr.exp1)
   local exp2 = compa(expr.exp2)
   return BINOP(expr.op, exp1, exp2)
@@ -667,13 +686,14 @@ function comp.unop(expr)
   return UNOP(expr.op, compa(expr.exp), expr.a, expr.b)
 end
 
-local builtin = { wait = 'WAIT' }
+local builtin = {}
 local BUILTIN = function(name)
   if builtin[name] then return funs[builtin[name]] end
   return nil
 end
 
 comp['break'] = function(expr)
+  if isHead then compError("'break' not allowed in trigger expression",expr) end
   return BREAK()
 end
 
@@ -708,12 +728,14 @@ function comp.name(expr)
 end
 
 comp['return'] = function(expr)
+  if isHead then compError("'return' not allowed in trigger expression",expr) end
   local args = compileList(expr.exp)
   return RETURN(table.unpack(args))
 end
 
 
 comp['if'] = function(expr)
+  if isHead then compError("'if/case' not allowed in trigger expression",expr) end
   local args = {}
   for _,c in ipairs(expr.args) do
     args[#args+1] = { cond = c.cond and compa(c.cond) or nil, body = compa(c.body) }
@@ -721,26 +743,28 @@ comp['if'] = function(expr)
   return IFA(args)
 end
 
-local function condFRAME(frame,expr)
-  return frame and FRAME(expr) or expr
-end
+local function condFRAME(frame,expr) return frame and FRAME(expr) or expr end
 
 comp['while'] = function(expr)
+  if isHead then compError("'while' not allowed in trigger expression",expr) end
   local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
   return condFRAME(frame,WHILE(compa(expr.cond), compa(expr.body)))
 end
 comp['repeat'] = function(expr)
+  if isHead then compError("'repeat' not allowed in trigger expression",expr) end
   local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
   return condFRAME(frame,REPEAT(compa(expr.cond), compa(expr.body)))
 end
 
 comp['loop'] = function(expr)
+  if isHead then compError("'loop' not allowed in trigger expression",expr) end
   local args = compileList(expr.statements)
   if #args == 1 then return LOOP(args[1]) end
   return LOOP(PROGN(table.unpack(args)))
 end
 
 comp['forin'] = function(expr)
+  if isHead then compError("'for' not allowed in trigger expression",expr) end
   return FORIN(expr.names,compa(expr.exp[1]),compa(expr.body))
 end
 
@@ -750,7 +774,6 @@ function comp.str(expr) return CONST(expr.value) end
 
 function comp.aref(expr)
   local table = compa(expr.tab)
-  
   local key = compa({type='num',value=expr.idx})
   return AREF(table, key)
 end
@@ -760,6 +783,7 @@ comp['local'] = function(expr)
 end
 
 function comp.assign(expr)
+  if isHead then compError("'assign' not allowed in trigger expression",expr) end
   local exprs = compileList(expr.exprs)
   local vars = {}
   for _,v in ipairs(expr.vars) do
@@ -814,13 +838,17 @@ function comp.assign(expr)
   return ASSIGNM(vars, exprs)
 end
 
-function comp.incvar(expr) return INCVAR(expr.name,expr.op,compa(expr.value)) end
+function comp.incvar(expr) 
+  if isHead then compError("'var incremental' not allowed in trigger expression",expr) end
+  return INCVAR(expr.name,expr.op,compa(expr.value)) 
+end
 
 function comp.getprop(expr) return GETPROP(expr.prop,compa(expr.obj)) end
 
 local function makeVarAssign(var) return function(env,val,cont,i) env:setVariable(var,val) cont(i) end end
 
 function comp.functiondef(expr)
+  if isHead then compError("'function definition' not allowed in trigger expression",expr) end
   local fun = compa(expr.fun)
   return ASSIGNM({makeVarAssign(expr.name[1])},{fun})
 end
@@ -845,7 +873,9 @@ function compile(ast)
   elseif ast.type == 'ruledef' then
     local head = ast.head
     local body = ast.body
+    isHead = true
     local h = compa(head)
+    isHead = false
     local b = compa(body)
     return IF(RULECHECK(h),b)
   else error("Not implemented:"..tostring(ast.type)) end
@@ -853,6 +883,7 @@ end
 
 local function eval(str,opts)
   assert(type(str) == "string","Expected string")
+  currentSrc = str
   opts = opts or {}
   local isRule = false
   local stat,ast = xpcall(function()
@@ -873,9 +904,12 @@ local function eval(str,opts)
   if not stat then print(ast) return idfun end
   if opts.tree then print(json.encodeFormated(ast)) end
   locals = nil
-  local cont = compile(ast)
-  opts.src = ast._src
-  return isRule and RULE(cont,opts) or EXPR(cont,opts)
+    local cstat,res = pcall(function()
+    local cont = compile(ast)
+    opts.src = ast._src
+    return isRule and RULE(cont,opts) or EXPR(cont,opts)
+  end)
+  if not cstat then print(res) return idfun else return res end
 end
 
 ER.compile = compile
