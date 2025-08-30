@@ -85,9 +85,11 @@ function QuickApp:main(er)
   -- rule("#rule-error{} => log('OK')")
   -- rule("log(json.encode(#foo{a=3}))")
 
-  rule("#foo{a='$a'} => log('OK: %s',env.p.a)")
+  -- rule("#foo{a='$a>8'} => log('OK: %s',env.p.a)")
+  -- rule("post(#foo{a=9},+/00:00:10)")
 
-  er.post({type='foo', a = 8})
+  rule("return os.date('%Y-%m-%d %H:%M:%S',2026/10/04/23:00:00)")
+  rule("return os.date('%Y-%m-%d %H:%M:%S',/10/04/23:00)")
 end
 
 function QuickApp:onInit()

@@ -88,6 +88,8 @@ local function time2str(t) return fmt("%02d:%02d:%02d",math.floor(t/3600),math.f
 local sunCalc 
 
 local function hm2sec(hmstr,ns)
+  local n = tonumber(hmstr)
+  if n then return n end
   local offs,sun
   sun,offs = hmstr:match("^(%a+)([+-]?%d*)")
   if sun and (sun == 'sunset' or sun == 'sunrise') then

@@ -23,6 +23,13 @@ Welcome to EventScript! This tutorial will teach you how to create powerful home
       - [Try this](#try-this-5)
   - [Using Lua Functions](#using-lua-functions)
   - [Structuring Rules with Events](#structuring-rules-with-events)
+    - [Basic Event Posting](#basic-event-posting)
+    - [Event Posting with Delays and Times](#event-posting-with-delays-and-times)
+    - [Event Pattern Matching and Parameters](#event-pattern-matching-and-parameters)
+    - [Complex Event Sequences](#complex-event-sequences)
+    - [Cancelling Scheduled Events](#cancelling-scheduled-events)
+    - [Advanced Event Patterns](#advanced-event-patterns)
+    - [Event Debugging and Logging](#event-debugging-and-logging)
       - [Try this](#try-this-6)
   - [Trigger Variables](#trigger-variables)
       - [Try this](#try-this-7)
@@ -265,7 +272,9 @@ end
 
 ## Structuring Rules with Events
 
-Use custom events to structure complex automations like subroutines:
+Use custom events to structure complex automations like subroutines. Events allow you to break down complex logic into manageable pieces and create sophisticated timing sequences.
+
+### Basic Event Posting
 
 ```lua
 function QuickApp:main(er)
@@ -276,21 +285,242 @@ function QuickApp:main(er)
   rule("motion:breached & 22:00..06:00 => post(#nightMode)")
   
   -- Event handlers act like subroutines
-  rule("#eveningRoutine => "..
-    "outdoorLights:on; "..
-    "securitySystem:arm; "..
-    "log('Evening routine activated')")
+  rule([[#eveningRoutine => 
+    outdoorLights:on; 
+    securitySystem:arm; 
+    log('Evening routine activated')
+  ]])
   
-  rule("#nightMode => "..
-    "nightLight:on; "..
-    "wait(5); "..  -- Wait 5 seconds
-    "nightLight:off")
+  rule([[#nightMode => 
+    nightLight:on; 
+    wait(5);  -- Wait 5 seconds
+    nightLight:off
+  ]])
+end
+```
+
+### Event Posting with Delays and Times
+
+Events can be posted immediately or scheduled for future execution using various time formats:
+
+```lua
+function QuickApp:main(er)
+  local rule, var, triggerVar = er.rule, er.variables, er.triggerVariables
+  
+  -- Immediate posting
+  rule("@sunset => post(#eveningRoutine)")
+  
+  -- Post with relative delay (+ prefix for relative time)
+  rule("@sunset => post(#lightsOff, +/01:30)")  -- 1 hour 30 minutes later
+  rule("motion:breached => post(#autoOff, +/00:05)")  -- 5 minutes later
+  rule("door:open => post(#securityCheck, +/00:00:30)")  -- 30 seconds later
+  
+  -- Post at specific time (absolute time)
+  rule("@sunset => post(#bedtimeRoutine, t/23:00)")  -- At 23:00 today
+  rule("@08:00 => post(#weekendCleanup, n/10:00)")  -- At 10:00 today, or if after 10:00, next daty at 10:00
+  
+  -- Post with date and time
+  rule("alarm:armed => post(#vacationMode, 2024/12/24/18:00')")  -- Christmas Eve 2024
+  rule("alarm:armed => post(#vacationMode, /12/24/18:00')")  -- Christmas Eve this year
+  
+  -- Event handlers
+  rule([[#lightsOff => 
+    allLights:off; 
+    log('Auto lights off after sunset')
+  ]])
+  rule([[#autoOff => 
+    if !motion:breached then 
+      lights:off 
+    end
+  ]])
+  rule([[#securityCheck => 
+    if door:isOpen then 
+      log('ALERT: Door still open!') 
+    end
+  ]])
+  rule([[#bedtimeRoutine => 
+    bedLights:on; 
+    wait(10); 
+    allLights:off
+  ]])
+end
+```
+
+### Event Pattern Matching and Parameters
+
+Events can carry parameters that can be matched or used in the handling rules:
+
+```lua
+function QuickApp:main(er)
+  local rule, var, triggerVar = er.rule, er.variables, er.triggerVariables
+  
+  -- Post events with parameters
+  rule("temp:value > 25 => post(#temperatureAlert{level='high', temp=temp:value})")
+  rule("temp:value < 15 => post(#temperatureAlert{level='low', temp=temp:value})")
+  rule("motion:breached => post(#motionDetected{room='kitchen', time=HMS(now)})")
+  
+  -- Pattern matching on event parameters
+  rule([[#temperatureAlert{level='high'} => 
+    fan:on; 
+    log('High temperature alert: %d°C', temp)
+  ]])
+  
+  rule([[#temperatureAlert{level='low'} => 
+    heater:on; 
+    log('Low temperature alert: %d°C', temp)
+  ]])
+  
+  -- Match events with any parameters (catch-all)
+  rule("#temperatureAlert => log('Temperature event received')")
+  
+  -- Match specific room
+  rule("#motionDetected{room='kitchen'} => kitchenLight:on")
+  rule("#motionDetected{room='bedroom'} => bedroomLight:on")
+  
+  -- Match any motion event regardless of room
+  rule("#motionDetected => log('Motion at %s in %s', time, room)")
+end
+```
+
+### Complex Event Sequences
+
+Create sophisticated automation sequences using event chains:
+
+```lua
+function QuickApp:main(er)
+  local rule, var, triggerVar = er.rule, er.variables, er.triggerVariables
+  
+  -- Multi-step security sequence
+  rule("@23:00 => post(#securitySequence{step='start'})")
+  
+  rule([[#securitySequence{step='start'} => 
+    log('Starting security sequence...'); 
+    post(#securitySequence{step='checkDoors'}, +/00:01)
+  ]])
+  
+  rule([[#securitySequence{step='checkDoors'} => 
+    if doors:isAllClosed then 
+      log('All doors secure'); 
+      post(#securitySequence{step='checkWindows'}, +/00:01) 
+    else 
+      log('WARNING: Some doors are open!'); 
+      post(#securitySequence{step='abort'}) 
+    end
+  ]])
+  
+  rule([[#securitySequence{step='checkWindows'} => 
+    if windows:isAllClosed then 
+      log('All windows secure'); 
+      post(#securitySequence{step='arm'}, +/00:01) 
+    else 
+      log('WARNING: Some windows are open!'); 
+      post(#securitySequence{step='abort'}) 
+    end
+  ]])
+  
+  rule([[#securitySequence{step='arm'} => 
+    securitySystem:arm; 
+    log('Security system armed - Good night!')
+  ]])
+  
+  rule([[#securitySequence{step='abort'} => 
+    log('Security sequence aborted - please check doors and windows')
+  ]])
+end
+```
+
+### Cancelling Scheduled Events
+
+You can cancel scheduled events using the reference returned by `post()`:
+
+```lua
+function QuickApp:main(er)
+  local rule, var, triggerVar = er.rule, er.variables, er.triggerVariables
+  
+  -- Store event reference for later cancellation
+  rule([[motion:breached => 
+    lightTimer = post(#autoLightsOff, +/00:10); -- Auto-off in 10 minutes
+    hallLight:on
+  ]])
+  
+  -- Cancel the timer if motion detected again
+  rule([[motion:breached & lightTimer => 
+    cancel(lightTimer); -- Cancel previous timer
+    lightTimer = post(#autoLightsOff, +/00:10) -- Start new timer
+  ]])
+  
+  -- Handle the auto-off event
+  rule([[#autoLightsOff => 
+    if !motion:breached then 
+      hallLight:off; 
+      log('Auto-turned off hall light') 
+    else 
+      log('Motion still detected, keeping light on') 
+    end
+  ]])
+end
+```
+
+### Advanced Event Patterns
+
+```lua
+function QuickApp:main(er)
+  local rule, var, triggerVar = er.rule, er.variables, er.triggerVariables
+  
+  -- Event with multiple parameters and conditions
+  rule("door:open => post(#doorEvent{door=door:name, time=now, weather=weather:condition})")
+  
+  -- Match events with specific combinations
+  rule([[#doorEvent{door='front', weather='rain'} => 
+    log('Front door opened in rain - activating entrance light'); 
+    entranceLight:on
+  ]])
+  
+  -- Use event parameters in calculations
+  rule([[#doorEvent => 
+    if door == 'front' & time > sunset then 
+      securityLight:on; 
+      post(#securityLightOff, +/00:05) 
+    end
+  ]])
+  
+  -- Event broadcasting to multiple handlers
+  rule([[alarm:breached => 
+    post(#emergency{type='breach', location=alarm:location}); 
+    post(#notification{message='Security breach detected'}); 
+    post(#lightSequence{mode='emergency'})
+  ]])
+  
+  -- Different handlers for the same event
+  rule("#emergency{type='breach'} => securitySystem:alert")
+  rule("#notification => log('ALERT: %s', message)")
+  rule("#lightSequence{mode='emergency'} => allLights:on; strobeLight:on")
+end
+```
+
+### Event Debugging and Logging
+
+```lua
+function QuickApp:main(er)
+  local rule, var, triggerVar = er.rule, er.variables, er.triggerVariables
+  
+  -- Log specific event types
+  rule("#debug => log('Debug event: %s', message)")
+  rule("#error => log('ERROR: %s', error)")
+  
+  -- Post debug events from other rules
+  rule([[temp:value > 30 => 
+    fan:on; 
+    post(#debug{message='Fan activated due to high temperature'})
+  ]])
 end
 ```
 
 #### Try this
-- Chain an event with a delay: in the action, do `post(#eveningFollowUp, '+00:15')` and handle `#eveningFollowUp` in another rule.
+- Chain an event with a delay: in the action, do `post(#eveningFollowUp, +/00:15)` and handle `#eveningFollowUp` in another rule.
 - Post a custom event from a device trigger and handle it separately.
+- Create a multi-step sequence with parameters: `post(#sequence{step='start', room='kitchen'})`.
+- Use event cancellation: store a timer reference and cancel it when conditions change.
 
 ## Trigger Variables
 

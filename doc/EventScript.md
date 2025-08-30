@@ -116,6 +116,13 @@ elseif <test2> then
 else 
   <statements> 
 end
+
+case
+  || <test> >> <statements>
+  || <test> >> <statements>
+  :
+  || <test> >> <statements>
+end
 ```
 
 **Examples:**
@@ -299,6 +306,16 @@ rule("@@00:00:10 => log('Ping every 10 seconds')")
 - **Short times**: Times between 00:00 and 24:00, represented as seconds after midnight
 - **Long times**: Epoch times (like Lua's `os.time()`) for absolute timestamps
 
+An absolue long time [YEAR]/MONTH/DAY/HOUR.MIN[:SEC]
+```lua
+rule("post(#futureEvent,2027/10/04/23:00)")  -- Post October 4, 23:00 2025
+rule("post(#futureEvent,/12/23/18:00)")  -- Post on Xmas eve, this year
+rule("#futureEvent => log('Future event'))")
+```
+
+Note that long times can't be compared to short times. To convert a long time to a short time, subtract midnight. Normally, need for such calculations are rare.
+
+
 #### Predefined Constants
 
 | Constant | Type | Description |
@@ -429,6 +446,36 @@ rule("@sunset => post(#myEvent)")            --POst #MyEvent at sunset
 ```
 
 > **Note:** `#event` is shorthand for `{type='event'}`, and `#event{k1=v1,...}` expands to `{type='event', k1=v1, ...}`
+
+**Event matching**
+```lua
+rule("#myEvent{x=42} => log('x is %s',env.event.x)")  -- Trigger on event with parameters
+rule("post(#myEvent{x=42})")                      -- Post event with parameters
+```
+Note: the event that triggers the rule is available in the local variable ev.event.
+
+```lua
+rule("#myEvent{x='$v'} => log('x is %s',env.p.v)")  -- Trigger on event with pattern match
+rule("post(#myEvent{x=42})")                      -- Post event with parameters
+```
+Values of type string and starting with prefix '\$' is considered a pattern, and will bind the variable after the '\$' to the value if there is a match. Matched variables are available in env.p.*
+
+```lua
+rule("#myEvent{x='$v>8'} => log('x is %s',env.p.v)")  -- Trigger on event with pattern match
+rule("post(#myEvent{x=9})")                      -- Post event with parameters
+```
+Patterns can also have an operator constraints applied. The trigger event only match, and the local variable is bound, if the constraint is true.
+In the above example v must be greater than 8 for the trigger event to match.
+Possible operators are
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$var>value` | value greater than | `#ev{key="$v>8"}` |
+| `$var<value` | value less than | `#ev{key="$v<8"}` |
+| `$var>=value` | value greater or equal than | `#ev{key="$v>=8"}` |
+| `$var<=value` | value greater or less than | `#ev{key="$v<=8"}` |
+| `$var~=value` | value differs from | `#ev{key="$v~=8"}` |
+| `$var==value` | value equal | `#ev{key="$v==8"}` |
+| `$var<>value` | value string match | `#ev{key="$m<>date.*"}` |
 
 ### Device Triggers
 

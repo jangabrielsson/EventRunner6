@@ -320,6 +320,9 @@ local function BINOP(op,exp1,exp2)
 end
 
 local unOpFuns = {
+  plus = function(v,a,b,env) return ER.toTime("+/"..v) end,
+  next = function(v,a,b,env) return ER.toTime("n/"..v) end,
+  today = function(v,a,b,env) return ER.toTime("t/"..v) end,
   add = function(v,a,b,env) return v+(a or b) end,
   neg = function(v,a,b,env) return - v end,
   sub = function(v,a,b,env) return a and a-v or v-b end,

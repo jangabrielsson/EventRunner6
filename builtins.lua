@@ -37,7 +37,7 @@ function builtin.max(...)
   return math.max(table.unpack(args))
 end
 function builtin.sort(t) table.sort(t) return t end
-function builtin.osdate(t) return os.date(t) end
+function builtin.osdate(a,b) return os.date(a,b) end
 function builtin.ostime(t) return os.time(t) end
 
 function builtin.global(name)
