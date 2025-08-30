@@ -26,16 +26,16 @@ local function partition(id) return api.get("/alarms/v1/partitions/" .. id) or {
 local function armState(id) return id==0 and fibaro.getHomeArmState() or fibaro.getPartitionArmState(id) end
 local function arm(id,action)
   if action=='arm' then 
-    local _,res = fibaro.armPartition(id); return res == 200
+    local _,res = ER.alarmFuns.armPartition(id); return res == 200
   else
-    local _,res = fibaro.unarmPartition(id); return res == 200
+    local _,res = ER.alarmFuns.unarmPartition(id); return res == 200
   end
 end
 local function tryArm(id)
-  local data,res = fibaro.tryArmPartition(id)
+  local data,res = ER.alarmFuns.tryArmPartition(id)
   if res ~= 200 then return false end
   if type(data) == 'table' then
-    fibaro.post({type='alarm',id=id,action='tryArm',property='delayed',value=data})
+    ER.sourceTrigger:post({type='alarm',id=id,action='tryArm',property='delayed',value=data})
   end
   return true
 end
@@ -179,22 +179,19 @@ setProps.defemail={set,'sendDefinedEmailNotification'}
 setProps.btn={set,'pressButton'} -- ToDo: click button on QA?
 setProps.email={function(id,_,val) local _,_ = val:match("(.-):(.*)"); fibaro.alert('email',{id},val) return val end,""}
 setProps.start={function(id,_,val) 
-  if isEvent(val) then 
-    fibaro.postRemote(id,val) return true
+  if type(val)=='table' and val.type then 
+    ER.sourceTrigger:postRemote(id,val) return true
   else 
     fibaro.scene("execute",{id}) return true
   end
 end,""}
-setProps.sim_pressed={function(id,_,val) fibaro.post({type='device',id=id,property='centralSceneEvent',value={keyId=val,keyAttribute='Pressed'}}) end,"push"} -- For simulated button presses
-setProps.sim_helddown={function(id,_,val) fibaro.post({type='device',id=id,property='centralSceneEvent',value={keyId=val,keyAttribute='HeldDown'}}) end,"push"}
-setProps.sim_released={function(id,_,val) fibaro.post({type='device',id=id,property='centralSceneEvent',value={keyId=val,keyAttribute='Released'}}) end,"push"}
-
-setProps.isCat={function(id,_,val) return ER.getDeviceInfo(id).categories[val]==true end,"..."}
-setProps.isInterf={function(id,_,val) return ER.getDeviceInfo(id).interfaces[val]==true end,"..."}
+setProps.sim_pressed={function(id,_,val) ER.sourceTrigger:post({type='device',id=id,property='centralSceneEvent',value={keyId=val,keyAttribute='Pressed'}}) end,"push"} -- For simulated button presses
+setProps.sim_helddown={function(id,_,val) ER.sourceTrigger:post({type='device',id=id,property='centralSceneEvent',value={keyId=val,keyAttribute='HeldDown'}}) end,"push"}
+setProps.sim_released={function(id,_,val) ER.sourceTrigger:post({type='device',id=id,property='centralSceneEvent',value={keyId=val,keyAttribute='Released'}}) end,"push"}
 
 local filters = ER.propFilters
 ER.propFilterTriggers = {}
-local function NB(x) if type(x)=='number' then return x~=0 and 1 or 0 else return x end end
+local function NB(x) if type(x)=='number' then return x~=0 and true or false else return x end end
 local function mapAnd(l) for _,v in ipairs(l) do if not NB(v) then return false end end return true end
 local function mapOr(l) for _,v in ipairs(l) do if NB(v) then return true end end return false end
 function filters.average(list) local s = 0; for _,v in ipairs(list) do s=s+BN(v) end return s/#list end
@@ -206,10 +203,6 @@ function filters.someTrue(list) return mapOr(list)  end
 function filters.mostlyTrue(list) local s = 0; for _,v in ipairs(list) do s=s+(NB(v) and 1 or 0) end return s>#list/2 end
 function filters.mostlyFalse(list) local s = 0; for _,v in ipairs(list) do s=s+(NB(v) and 0 or 1) end return s>#list/2 end
 function filters.bin(list) local s={}; for _,v in ipairs(list) do s[#s+1]=NB(v) and 1 or 0 end return s end
-function filters.GV(list) local s={}; for _,v in ipairs(list) do s[#s+1]=GlobalV(v) end return s end
-ER.propFilterTriggers.GV = true
-function filters.QV(list) local s={}; for _,v in ipairs(list) do s[#s+1]=QuickAppV(v) end return s end
-ER.propFilterTriggers.QV = true
 function filters.id(list,ev) return next(ev) and ev.id or list end -- If we called from rule trigger collector we return whole list
 local function collect(t,m)
   if type(t)=='table' then
@@ -236,7 +229,7 @@ class 'NumberPropObject'(PropObject)
 function NumberPropObject:__init(num)  PropObject.__init(self) self.id = num end
 function NumberPropObject:getProp(prop,env)
   local gp = getProps[prop]
-  if not gp then return env.error("Unknown property: "..tostring(prop)) end
+  if not gp then env.error("Unknown property: "..tostring(prop)) os.exit() end
   local fun = gp[2]
   local prop = gp[3]
   local value = fun(self.id,prop,env.trigger)
@@ -270,6 +263,12 @@ end
 
 local function executeGetProp(obj,prop,env)
   if type(obj) == 'table' then
+    if next(obj) == nil then return env.error("Expected non-empty table, got empty table") end
+    if ER.propFilters[prop] then
+      local filter = ER.propFilters[prop]
+      if not filter then env.error("Unknown filter: "..tostring(prop)) os.exit() end
+      return filter(obj, env.trigger)
+    end
     if #obj == 0 then return env.error("Expected non-empty table, got empty table") end
     local r,fo = {},nil
     for k,v in pairs(obj) do
@@ -278,7 +277,7 @@ local function executeGetProp(obj,prop,env)
       if not v then return env.error("Not a prop object: "..tostring(v)) end
       r[k] = v:getProp(prop,env)
     end
-    r = fo:reduce(prop,r)
+    if fo then r = fo:reduce(prop,r) end
     return r
   else
     local v = resolvePropObject(obj)

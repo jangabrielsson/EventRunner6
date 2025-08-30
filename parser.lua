@@ -786,8 +786,14 @@ end
 function specOp.event(t,vals,ops,tkns)
   local tab
   if tkns.peek().type == 't_lcur' then
-    local tab = tablevalue(tkns)
-    tab.type = t.value
+    tkns.next()
+    local val = tablevalue(tkns)
+    if val.const then
+      val.value.type=t.value
+    elseif val.type == 'table' then
+      table.insert(val.value,1,{key='type',value={type='const',value=t.value}})
+    else perror("Expected table constructor or ... after event{",tkns.peek()) end
+    tab = val
   else tab = {type='table',value={type=t.value},const=true,_dbg=t.dbg} end
   vals.push(tab)
 end

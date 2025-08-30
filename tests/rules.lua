@@ -80,7 +80,14 @@ function QuickApp:main(er)
   -- rule("HT.remote:scene==S1.click => log('S1 click %s',HT.remote:scene)")
   -- rule("click(HT.remote,S1.click)")
 
-  rule("@now+1 => return a>'h'")
+  -- rule("@@00:00:05 => return a / nil")
+
+  -- rule("#rule-error{} => log('OK')")
+  -- rule("log(json.encode(#foo{a=3}))")
+
+  rule("#foo{a='$a'} => log('OK: %s',env.p.a)")
+
+  er.post({type='foo', a = 8})
 end
 
 function QuickApp:onInit()

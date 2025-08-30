@@ -184,10 +184,19 @@ function QuickApp:main(er)
     -- "return date('* 10-12 * 8 *')",{true},nil, --min,hour,days,month,wday
     -- "local a=9; case || false >> a=18 || true >> a=19 end; return a",{19},nil,
     -- "log(a); return true",{true},nil,
-    "return Obj3:foo(8)",{8},nil,
-    "return nil ?? 66",{66},nil,
-    "return false ?? 66",{false},nil,
-    
+    -- "return Obj3:foo(8)",{8},nil,
+    -- "return nil ?? 66",{66},nil,
+    -- "return false ?? 66",{false},nil,
+    -- "return {2,3,4}:sum",{9},nil,
+    -- "return {2,3,4}:average",{3},nil,
+    -- "return {1,false,true,'g',6,0}:bin",{{1,0,1,1,1,0}},nil,
+    -- "return {true,false}:mostlyTrue",{false},nil,
+    -- "return {true,false,true}:mostlyTrue",{true},nil,
+    -- "return {true,false,false}:mostlyTrue",{false},nil,
+    -- "return {true,false}:mostlyFalse",{false},nil,
+    -- "return {true,false,false}:mostlyFalse",{true},nil,
+    -- "return {true,false,true}:mostlyFalse",{false},nil,
+    "return {a = 8, b = 9}:leaf",{{8,9}},nil,
     -- "do local a = 0; for k,v in pairs(T2) do a += v end; return a end",{14},nil,
     -- "local a = 0; for k,v in ipairs(T2) do a += k end; return a",{10},nil
   }

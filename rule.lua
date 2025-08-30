@@ -40,9 +40,13 @@ local RuleMT = {
   __tostring = function(r) return fmt("[Rule:%d]", r.id) end,
 }
 
-local function started_rule(self, event) INFO("🎬 %s: %s", self, tostring(event)) end
+local function started_rule(self, event) 
+  local str = tostring(event) 
+  INFO("🎬 %s: %s", self, str) 
+end
 local function check_rule(rule, arg, ...) 
-  if arg then INFO("👍 %s", rule) else INFO("👎 %s", rule) end
+  local str = tostring(rule)
+  if arg then INFO("👍 %s", str) else INFO("👎 %s", str) end
 end
 local function result_rule(rule, ...) 
   local res = {ER.args2str(...)}
@@ -105,7 +109,12 @@ local function createRule(expr, data, opts)
   opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
 
   opts.cont = function(...) if opts.result then opts.result(self,...) end end
-  opts.err = opts.err or function(str) ERROR("%s: %s", self, str) end
+  opts.err = opts.err or function(str) 
+    local msg = fmt("%s: %s (disabling)", self, str) 
+    ERROR(msg)
+    ER.sourceTrigger:post({type='rule-error',rule=self,message=msg},0)
+    self:disable()
+  end
   self.env = ER.createEnv(opts.cont,opts.err,opts)
   self.env.check = opts.check
   self.env.rule = self
@@ -128,11 +137,12 @@ local function createRule(expr, data, opts)
     skipTrigger = true
   end
   
-  for _,t in ipairs(self.triggers) do
+  for evid,t in pairs(self.triggers) do
     if t.type ~= 'Daily' and t.type ~= 'Interval' then
       if not skipTrigger then
+        local eventId = evid
         sourceTrigger:subscribe(t,function(event)
-          self:start(event.event)
+          self:start(event.event,eventId,event.p)
         end)
       elseif t._df then
         t._df = nil
@@ -145,7 +155,7 @@ local function createRule(expr, data, opts)
   
   function self:dumpTriggers()
     printf("Rule %d triggers:",self.id)
-    for i,t in ipairs(self.triggers) do print(fmt("⚡ %s", json.encodeFast(t))) end
+    for _,t in ipairs(self.triggers) do print(fmt("⚡ %s", json.encodeFast(t))) end
     if self.daily then 
       evalArg(function(values)
         if type(values) ~= 'table' then values = {values} else values = flatten(values) end
@@ -208,11 +218,13 @@ local function createRule(expr, data, opts)
   function self:enable() self.disabled = nil; self:setupDaily(false) self:setupInterval() end
   function self:disable() self.disabled = true; self:clearTimers()end
 
-  function self:start(event)
+  function self:start(event,id,matchvars)
     if self.disabled then return end
     if opts.started then opts.started(self,event) end
     local env = table.copyShallow(self.env)
     env.trigger = event
+    env.eventId = id
+    env.locals = {env = {event = event, p = matchvars}}
     expr(opts.cont,env)
     if event and event._df then self:setupDaily(false) end
   end
@@ -232,19 +244,19 @@ local function defRule(expr, opts)
     triggers = {},
     daily = nil,
     interval = nil,
-    error = function(str) ERROR("❌ Rule %d: %s '%s'", id, str, src:gsub("%s*\n%s*"," ") // 80) os.exit() end,
+    error = function(str) ERROR("❌ Rule %d: %s '%s'", id, str, src:gsub("%s*\n%s*"," ") // 80) os.exit() end, -- Only used when checking triggers
   }) do env[k] = v end
   
   local function cont()
-    triggers = env.triggers
+    --triggers = env.triggers
   end
 
   findTriggers(head, cont, env)
 
   if env.interval and env.daily then return env.error("Only one @daily or @@interval per rule") end
-  if env.daily then table.insert(env.triggers,Event({type='Daily',id=env.id})) end
+  if env.daily then env.triggers["D"]=Event({type='Daily',id=env.id}) end
   
-  if env.interval == nil and env.daily == nil and #env.triggers == 0 then
+  if env.interval == nil and env.daily == nil and next(env.triggers)==nil then
     return env.error("Rule has no triggers")
   end
 
@@ -276,6 +288,7 @@ local function evalArgAux(vals, cont, env, arg, ...)
 end
 function evalArg(cont, env, ...) evalArgAux({}, cont, env, ...) end
 
+local evid = 0
 function findTriggers(c, cont, env, df)
   local typ = etype(c)
   if typ == 'unop' then
@@ -288,7 +301,7 @@ function findTriggers(c, cont, env, df)
       df = true
     elseif op == 'interv' then
       if env.interval then env.error("Only one @interv per rule") end
-      table.insert(env.triggers,Event({type='Interval',id=env.id}))
+      env.triggers["I"]=Event({type='Interval',id=env.id})
       env.interval = arg 
     end
     scanArg(cont, env, df, arg)
@@ -300,12 +313,13 @@ function findTriggers(c, cont, env, df)
     assert(pv, "Unknown property in getprop trigger: "..prop)
     if not pv[5] then return cont() end
     local obj = earg(c,2)
+    local propName = pv[3]
     obj(function(value)
       if tonumber(value) then
-        table.insert(env.triggers,Event({type=pv[1],id=value,property=pv[3]}))
+        env.triggers["DEV:"..value..propName]=Event({type=pv[1],id=value,property=propName})
       elseif type(value) == 'table' then
         for _,id in ipairs(value) do
-          table.insert(env.triggers,Event({type=pv[1],id=id,property=pv[3]}))
+          env.triggers["DEV:"..id..propName]=Event({type=pv[1],id=id,property=propName})
         end
       else
         env.error("Invalid object in getprop trigger: "..json.encodeFast(value))
@@ -315,11 +329,14 @@ function findTriggers(c, cont, env, df)
   elseif typ == 'const' then
     local t = earg(c,1)
     if type(t) == 'table' and type(t.type) == 'string' then
+      evid = evid+1
+      local eventId = "EV:"..evid
       c.evalHook = function(c,cont,env) 
-        if not env.trigger then return cont(false) end
-        cont(table.equal(env.trigger,t))
+        if not env.trigger then cont(false)
+        elseif env.eventId ~= eventId then return cont(false) else
+        cont(true) end
       end
-      table.insert(env.triggers,Event(t))
+      env.triggers[eventId]=Event(t)
     end
     cont()
   elseif typ == 'table' then
@@ -345,14 +362,14 @@ function findTriggers(c, cont, env, df)
   elseif typ == 'var' then
     local name = earg(c,1)
     if ER.triggerVars[name] then
-      table.insert(env.triggers,Event({type='trigger-variable',name=name, _df=df}))
+      env.triggers['TV:'..name]=Event({type='trigger-variable',name=name, _df=df})
     end
   elseif typ == 'gvar' then
     local name = earg(c,1)
-    table.insert(env.triggers,Event({type='global-variable',name=name, _df=df}))
+    env.triggers['GV:'..name]=Event({type='global-variable',name=name, _df=df})
   elseif typ == 'qvar' then
     local name = earg(c,1)
-    table.insert(env.triggers,Event({type='quickvar',id=quickApp.id,name=name, _df=df}))
+    env.triggers['QV:'..name]=Event({type='quickvar',id=quickApp.id,name=name, _df=df})
   elseif typ == 'aref' then
     scanArg(cont, env, df, eargs(c))
   else
@@ -443,6 +460,7 @@ function createER(qa)
   function _er.speed(time) return ER.speedTime(time,_er.start) end
   function _er.post(event,time) return sourceTrigger:post(event,time) end
   function _er.cancel(ref) return sourceTrigger:cancel(ref) end
+  function _er.postRemote(id,event) sourceTrigger:postRemote(id,event) end
   _er.loadSimDevice = ER.loadSimDev
   _er.eval = _er.rule -- alias
   setmetatable(_er,{

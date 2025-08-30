@@ -289,7 +289,9 @@ end
 local EventMT = { 
   __tostring = function(ev)
     local s = json.encodeFast(ev)
-    return fmt("#%s{%s}",ev.type,s:match(",(.*)}") or "") 
+    if s:sub(1,1)=='#' then return s end
+    local m = s:match("^.-,(.*)}$") or ""
+    return fmt("#%s{%s}",ev.type,m) 
   end
 }
 ER.EventMT = EventMT
@@ -739,8 +741,43 @@ local function prettyJsonFlat(e0)
   return table.concat(res)
 end
 
+local alarmFuns = {}
+function alarmFuns.armPartition(id)
+  if id == 0 then
+    return api.post("/alarms/v1/partitions/actions/arm",{})
+  else
+    return api.post("/alarms/v1/partitions/"..id.."/actions/arm",{})
+  end
+end
+
+function alarmFuns.unarmPartition(id)
+  if id == 0 then
+    return api.delete("/alarms/v1/partitions/actions/arm")
+  else
+    return api.delete("/alarms/v1/partitions/"..id.."/actions/arm")
+  end
+end
+
+function alarmFuns.tryArmPartition(id)
+  local res,code
+  if id == 0 then
+    res,code = api.post("/alarms/v1/partitions/actions/tryArm",{})
+    if type(res) == 'table' then
+      local r = {}
+      for _,p in ipairs(res) do r[p.id]=p.breachedDevices end
+      return next(r) and r or nil
+    else
+      return nil
+    end
+  else
+    local res,code = api.post("/alarms/v1/partitions/"..id.."/actions/tryArm",{})
+    if res.armDelayed and #res.armDelayed > 0 then return {[id]=res.breachedDevices} else return nil end
+  end
+end
+
 json.encodeFast = prettyJsonFlat
 
+ER.alarmFuns = alarmFuns
 ER.toSeconds = toSeconds
 ER.midnight = midnight
 ER.getWeekNumber = getWeekNumber

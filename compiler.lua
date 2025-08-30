@@ -276,27 +276,27 @@ local function checkArgs(a,t1,b,t2,env,e1,e2)
 end
 
 local opFuns = {
-  ['add'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a + b end,
-  ['sub'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a - b end,
-  ['mul'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a * b end,
-  ['div'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a / b end,
-  ['mod'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a % b end,
-  ['pow'] = function(a,b,env,e1,e2) checkArgs(a,'number',b,'number',env,e1,e2) return a ^ b end,
-  ['eq'] = function(a,b,env,e1,e2) return a == b end,
-  ['neq'] = function(a,b,env,e1,e2) return a ~= b end,
-  ['lt'] = function(a,b,env,e1,e2) return a < b end,
-  ['lte'] = function(a,b,env,e1,e2) return a <= b end,
-  ['gt'] = function(a,b,env,e1,e2) return a > b end,
-  ['gte'] = function(a,b,env,e1,e2) return a >= b end,
-  ['betw'] = function(a,b,env,e1,e2)
-    checkArgs(a,'number',b,'number',env,e1,e2)
+  ['add'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 + arg2 end,
+  ['sub'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 - arg2 end,
+  ['mul'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 * arg2 end,
+  ['div'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 / arg2 end,
+  ['mod'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 % arg2 end,
+  ['pow'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 ^ arg2 end,
+  ['eq'] = function(arg1,arg2,env,e1,e2) return arg1 == arg2 end,
+  ['neq'] = function(arg1,arg2,env,e1,e2) return arg1 ~= arg2 end,
+  ['lt'] = function(arg1,arg2,env,e1,e2) return arg1 < arg2 end,
+  ['lte'] = function(arg1,arg2,env,e1,e2) return arg1 <= arg2 end,
+  ['gt'] = function(arg1,arg2,env,e1,e2) return arg1 > arg2 end,
+  ['gte'] = function(arg1,arg2,env,e1,e2) return arg1 >= arg2 end,
+  ['betw'] = function(arg1,arg2,env,e1,e2)
+    checkArgs(arg1,'number',arg2,'number',env,e1,e2)
     local ts = os.date("*t")
     local t = ts.hour*3600 + ts.min*60 + ts.sec
-    b = b >= a and b or b + 24*3600
-    t = t >= a and t or t + 24*3600
-    return a <= t and t <= b
+    arg2 = arg2 >= arg1 and arg2 or arg2 + 24*3600
+    t = t >= arg1 and t or t + 24*3600
+    return arg1 <= t and t <= arg2
   end,
-  ['nilco'] = function(a,b,env,e1,e2) if a ~= nil then return a else return b end end,
+  ['nilco'] = function(arg1,arg2,env,e1,e2) if arg1 ~= nil then return arg1 else return arg2 end end,
 }
 
 local function BINOP(op,exp1,exp2)
@@ -309,7 +309,7 @@ local function BINOP(op,exp1,exp2)
             cont(res)
           end)
           if not stat then
-            env.error(fmt("%s: %s %s %s",err:match("%d+:%s*(.*)") or err, op, exp1, exp2))
+            env.error(fmt("%s: %s %s %s",(err or ""):match("%d+:%s*(.*)") or err, op, exp1, exp2))
           end
         else
           env.error("Unknown operator: " .. tostring(op))
@@ -586,6 +586,9 @@ ER.createEnv = createEnv
 local function RULE(expr,opts) return function() return ER.defRule(expr,opts) end end
 local function RULECHECK(rule) return 
   CONT(function(cont,env) 
+    if env.locals then
+      for k,v in pairs(env.locals) do env:pushVariable(k,v) end
+    end
     rule(function(...)
       if env.check then env.check(env.rule,...) end
       cont(...)
