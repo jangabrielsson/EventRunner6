@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.5] - 2025-08-31
+
+## Changes in v0.0.5
+
+### Commits since v0.0.4:
+
+- 🐛 **Fix**: correct value retrieval in PROGN function and update rules for weather triggers
+- ✨ **Feature**: Add Weather property class and integrate weather API
+- ✨ **Feature**: update Recipes documentation with new sections and improve structure
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.4] - 2025-08-30
 
 ## Changes in v0.0.4
