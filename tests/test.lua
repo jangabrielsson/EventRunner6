@@ -196,9 +196,10 @@ function QuickApp:main(er)
     -- "return {true,false}:mostlyFalse",{false},nil,
     -- "return {true,false,false}:mostlyFalse",{true},nil,
     -- "return {true,false,true}:mostlyFalse",{false},nil,
-    "return {a = 8, b = 9}:leaf",{{8,9}},nil,
+    -- "return {a = 8, b = 9}:leaf",{{8,9}},nil,
     -- "do local a = 0; for k,v in pairs(T2) do a += v end; return a end",{14},nil,
     -- "local a = 0; for k,v in ipairs(T2) do a += k end; return a",{10},nil
+    "do a = 99; break; print(88) end; return a",{99},nil,
   }
   
   local function checkTriggers(rule,triggers)

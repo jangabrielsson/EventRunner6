@@ -7,7 +7,10 @@ local builtin = {}
 ER.builtin = builtin
 
 function builtin.log(fm,...) 
-  if #{...} == 0 then if fm==nil then print() else print(fm) end else print(string.format(fm,...)) end
+  local msg = ""
+  if #{...} == 0 then if fm==nil then msg="" else msg=fm end else msg =string.format(fm,...) end
+  print(msg)
+  return msg
 end
 
 function builtin.post(ev,time) return ER._er.post(ev,time) end

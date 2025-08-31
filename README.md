@@ -25,6 +25,7 @@ EventRunner6 is a powerful rule-based automation framework for Fibaro Home Cente
 1. Import the `EventRunner6.fqa` file into your Fibaro HC3 system
 2. Configure the QuickApp in your desired room
 3. Start writing rules in the `main` function
+4. [Home automation recipes](doc/Recipes.md)
 
 ### Basic Example
 

@@ -7,11 +7,12 @@ local NO = "❌"
 local BELL = "🔔"
 
 local function printf(...) print(string.format(...)) end
-count,dings = 0,3
-function ding()
+local regs = {}
+function reg(id) regs[id] = true end
+function ding(id)
   printf(BELL)
-  count = count+1
-  if count == dings then printf("%s All tests done!",YES) os.exit() end
+  regs[id] = nil
+  if not next(regs) then printf("%s All tests done!",YES) os.exit() end
 end
 
 local a,b = api.post("/globalVariables/",{name="GV1",value="0"})
@@ -38,33 +39,32 @@ function QuickApp:main(er)
     return 2000 
   end
 
-  -- rule("log('ASF=%s',ASF(4,5)); ding()")
-  -- rule("#foo => a = 42; post(#a)")
-  -- rule("#a => if a == 42 then ding();  HT.kitchen.light.roof:on; end")
-  -- rule("post(#foo)")
+  reg('R1') rule("log('ASF=%s',ASF(4,5)); ding('R1')")
+  
+  reg('R2') rule("#foo1 => a1 = 42; post(#a1)")
+  rule("#a1 => if a1 == 42 then ding('R2');  HT.kitchen.light.roof:on; end")
+  rule("post(#foo1)")
 
-  -- rule("HT.kitchen.light.roof:isOn => ding()")
-  triggerVar.x = 36000
+  reg('R3') rule("HT.kitchen.light.roof:isOn => ding('R3')")
 
-  -- rule("trueFor(00:00:02,HT.kitchen.light.roof:isOn) => log(x); log('TrueFor:%s',again(5))")
-  -- rule("HT.kitchen.light.roof:on")
+  reg('R4') rule("trueFor(00:00:01,HT.kitchen.light.roof:isOn) => b1 = (b1 ?? 0) + 1; again(3); if b1 == 3 then ding('R4') end")
 
-  -- rule("wait(00:00:15); HT.kitchen.light.roof:off; HT.kitchen.light.roof:on")
 
-  -- rule("x => log('X=%s',x)")
-  -- rule("x = 42")
+  triggerVar.x1 = 0
 
-  -- rule("$GV1 => log('GV1=%s',$GV1)")
-  -- rule("$GV1=true")
+  reg('R5') rule("x1 == 42 => ding('R5')")
+  rule("x1 = 42")
 
-  -- rule("$$QV1 => log('QV1=%s',$$QV1)")
-  -- rule("$$QV1 = true; log('OKOK')")
-  -- rule("c = 0")
-  -- rule("@x => c += 1; if c > 2 then x = 11:00 end; log('TIME %s',HM(now))")
-  -- rule("local a = 9; b = 8")
-  -- rule("log(a); log('ok %s',b)")
-  -- var.r1 = rule("@@00:00:03 => log('ok')")
-  -- rule("wait(00:00:10); r1:disable()")
+  reg('R6') rule("$GV1 => ding('R6')")
+  rule("$GV1=true")
+
+  reg('R7') rule("$$QV1 => ding('R7')")
+  rule("$$QV1 = true")
+
+  rule("c1 = 0")
+  rule("@x2 => c1 += 1; if c1 > 2 then x2 = 11:00 end; log('TIME %s',HM(now))")
+  var.r1 = rule("@@00:00:03 => log('ok')")
+  rule("wait(00:00:10); r1:disable()")
 
   function var.click(id,val) 
     api.post("/plugins/publishEvent",{
@@ -88,8 +88,6 @@ function QuickApp:main(er)
   -- rule("#foo{a='$a>8'} => log('OK: %s',env.p.a)")
   -- rule("post(#foo{a=9},+/00:00:10)")
 
-  rule("return os.date('%Y-%m-%d %H:%M:%S',2026/10/04/23:00:00)")
-  rule("return os.date('%Y-%m-%d %H:%M:%S',/10/04/23:00)")
 end
 
 function QuickApp:onInit()
