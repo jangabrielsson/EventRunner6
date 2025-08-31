@@ -222,12 +222,43 @@ PropObject = {}
 class 'PropObject'
 function PropObject:__init()
   self._isPropObject = true
+  self.__str="PObj:"..tostring({}):match("(%d.*)")
+end
+function PropObject:isProp(prop) return self.getProp[prop] or self.setProp[prop] end
+function PropObject:isTrigger(prop) return self.trigger[prop] end
+function PropObject:hasReduce(prop) return self.map[prop] end
+function PropObject:_setProp(prop,value)
+  local sp = self.setProp[prop]
+  if not sp then return nil,"Unknown property: "..tostring(prop) end
+  sp(self,prop,value)
+  return true
+end
+function PropObject:_getProp(prop,env)
+  local gp = self.getProp[prop]
+  if not gp then return nil,"Unknown property: "..tostring(prop) end
+  return gp(self,prop)
+end
+function PropObject:getTrigger(id,prop)
+  local t = self.trigger[prop]
+  return t and type(t) == "func".."tion" and t(self,id,prop) or type(t) == 'table' and t or nil
+end
+function PropObject:reduce(prop,value)
+  local red = self.map[prop]
+  return red(value)
+end
+function PropObject:__tostring() return self.__str end
+
+ER.PropObject = PropObject
+function ER.definePropClass(name)
+  class(name)(PropObject)
+  local cl = _G[name]
+  cl.getProp,cl.setProp,cl.trigger,cl.map={},{},{},{}
 end
 
 NumberPropObject = {}
 class 'NumberPropObject'(PropObject)
 function NumberPropObject:__init(num)  PropObject.__init(self) self.id = num end
-function NumberPropObject:getProp(prop,env)
+function NumberPropObject:_getProp(prop,env)
   local gp = getProps[prop]
   if not gp then env.error("Unknown property: "..tostring(prop)) os.exit() end
   local fun = gp[2]
@@ -235,7 +266,7 @@ function NumberPropObject:getProp(prop,env)
   local value = fun(self.id,prop,env.trigger)
   return value
 end
-function NumberPropObject:setProp(prop,value)
+function NumberPropObject:_setProp(prop,value)
   local sp = setProps[prop]
   if not sp then return nil,"Unknown property: "..tostring(prop) end
   local fun = sp[1]
@@ -250,6 +281,9 @@ function NumberPropObject:reduce(prop,value,env)
   if red == nil then return value end
   return red(value)
 end
+function NumberPropObject:isProp(prop) return getProps[prop] or setProps[prop] end
+function NumberPropObject:isTrigger(prop) return (getProps[prop] or {})[5] end
+function NumberPropObject:getTrigger(id, prop) return {type='device', id = self.id, property =  getProps[prop][3]} end
 
 local numObjects = {}
 local function resolvePropObject(obj)
@@ -275,14 +309,14 @@ local function executeGetProp(obj,prop,env)
       local v = resolvePropObject(v)
       fo = fo or v
       if not v then return env.error("Not a prop object: "..tostring(v)) end
-      r[k] = v:getProp(prop,env)
+      r[k] = v:_getProp(prop,env)
     end
     if fo then r = fo:reduce(prop,r) end
     return r
   else
     local v = resolvePropObject(obj)
     if not v then return env.error("Not a prop object: "..tostring(v)) end
-    return v:getProp(prop,env)
+    return v:_getProp(prop,env)
   end
 end
 
@@ -292,14 +326,15 @@ local function executeSetProp(obj,prop,value,env)
     for _,v in pairs(obj) do
       local v = resolvePropObject(v)
       if not v then return env.error("Not a prop object: "..tostring(v)) end
-      v:setProp(prop,value)
+      v:_setProp(prop,value)
     end
   else
     local v = resolvePropObject(obj)
     if not v then return env.error("Not a prop object: "..tostring(v)) end
-    v:setProp(prop,value)
+    v:_setProp(prop,value)
   end
 end
 
 ER.executeGetProp = executeGetProp
 ER.executeSetProp = executeSetProp
+ER.resolvePropObject = resolvePropObject

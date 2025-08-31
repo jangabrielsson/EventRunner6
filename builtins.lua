@@ -139,6 +139,16 @@ function ER.customDefs(er)
 
   var.QA = er.qa
   
+  Weather = {}
+  er.definePropClass("Weather") -- Define custom weather object
+  function Weather:__init() PropObject.__init(self) end
+  function Weather.getProp.temp(prop,env) return api.get("/weather").Temperature end
+  function Weather.getProp.humidity(prop,env) return  api.get("/weather").Humidity end
+  function Weather.getProp.wind(prop,env) return  api.get("/weather").Wind end
+  function Weather.trigger.temp(prop) return {type='weather', property='Temperature'} end
+  function Weather.trigger.humidity(prop) return {type='weather', property='Humidity'} end
+  function Weather.trigger.wind(prop) return {type='weather', property='Wind'} end
+  var.weather = Weather()
 end
 
 

@@ -155,7 +155,7 @@ local function createRule(expr, data, opts)
   
   function self:dumpTriggers()
     printf("Rule %d triggers:",self.id)
-    for _,t in ipairs(self.triggers) do print(fmt("⚡ %s", json.encodeFast(t))) end
+    for _,t in pairs(self.triggers) do print(fmt("⚡ %s", json.encodeFast(t))) end
     if self.daily then 
       evalArg(function(values)
         if type(values) ~= 'table' then values = {values} else values = flatten(values) end
@@ -308,21 +308,16 @@ function findTriggers(c, cont, env, df)
   elseif typ == 'and' or typ == 'or' then 
     scanArg(cont, env, df, table.unpack(eargs(c)))
   elseif typ == 'getprop' then
-    local prop = earg(c,1)
-    local pv = ER.getProps[prop]
-    assert(pv, "Unknown property in getprop trigger: "..prop)
-    if not pv[5] then return cont() end
     local obj = earg(c,2)
-    local propName = pv[3]
-    obj(function(value)
-      if tonumber(value) then
-        env.triggers["DEV:"..value..propName]=Event({type=pv[1],id=value,property=propName})
-      elseif type(value) == 'table' then
-        for _,id in ipairs(value) do
-          env.triggers["DEV:"..id..propName]=Event({type=pv[1],id=id,property=propName})
-        end
-      else
-        env.error("Invalid object in getprop trigger: "..json.encodeFast(value))
+    local prop = earg(c,1)
+    obj(function(values)
+      if not(type(values) == 'table' and not values._isPropObject) then values = {values} end
+      for _,o in ipairs(values) do
+        local obj = ER.resolvePropObject(o)
+        assert(obj:isProp(prop), "Unknown property in getprop trigger: "..prop)
+        if not obj:isTrigger(prop) then return cont() end
+        local tr = obj:getTrigger(o,prop)
+        env.triggers["DEV:"..tostring(o)..prop]=Event(tr)
       end
       cont()
     end,env)
@@ -457,6 +452,7 @@ function createER(qa)
     _er.qa:main(_er) 
     printf("=========== Load time: %.3fs ============",os.clock()-t0)
   end
+  _er.definePropClass = ER.definePropClass
   function _er.speed(time) return ER.speedTime(time,_er.start) end
   function _er.post(event,time) return sourceTrigger:post(event,time) end
   function _er.cancel(ref) return sourceTrigger:cancel(ref) end

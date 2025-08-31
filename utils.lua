@@ -407,8 +407,10 @@ local function createEventEngine()
   fromHash['custom-event'] = function(e) return {'custom-event'..e.name,'custom-event'} end
   fromHash['deviceEvent'] = function(e) return {"deviceEvent"..e.id..e.value,"deviceEvent"..e.id,"deviceEvent"..e.value,"deviceEvent"} end
   fromHash['sceneEvent'] = function(e) return {"sceneEvent"..e.id..e.value,"sceneEvent"..e.id,"sceneEvent"..e.value,"sceneEvent"} end
+  fromHash['Daily'] = function(e) return {'daily'..e.id,'daily'} end
+  fromHash['Interval'] = function(e) return {'interval'..e.id,'interval'} end
+
   toHash['device'] = function(e) return "device"..(e.id or "")..(e.property or "") end
-  
   toHash['global-variable'] = function(e) return 'global-variable'..(e.name or "") end
   toHash['quickvar'] = function(e) return 'quickvar'..(e.id or "")..(e.name or "") end
   toHash['profile'] = function(e) return 'profile'..(e.property or "") end
@@ -416,8 +418,10 @@ local function createEventEngine()
   toHash['custom-event'] = function(e) return 'custom-event'..(e.name or "") end
   toHash['deviceEvent'] = function(e) return 'deviceEvent'..(e.id or "")..(e.value or "") end
   toHash['sceneEvent'] = function(e) return 'sceneEvent'..(e.id or "")..(e.value or "") end
-  
-  
+  toHash['Daily'] = function(e) return 'daily'..(e.id or "") end
+  toHash['Interval'] = function(e) return 'interval'..(e.id or "") end
+
+
   local MTrule = { __tostring = function(self) return fmt("SourceTriggerSub:%s",self.event.type) end }
   function self.addEventHandler(pattern,fun,doc)
     if not isEvent(pattern) then error("Bad event pattern, needs .type field") end

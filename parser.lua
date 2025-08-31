@@ -619,6 +619,9 @@ function prefixexpr(tkns,r)
       local args = args(tkns)
       return prefixexpr(tkns,{type='objcall',obj=r,fun=n,args=args,expr=isExpr,_dbg=t.dbg})
     else
+      if tkns.peek().type == 't_dot' or tkns.peek().type =='t_ddot' then
+        return prefixexpr(tkns,{type='getprop',obj=r,prop=n,_dbg=t.dbg}) -- property access
+      end 
       return {type='getprop',obj=r,prop=n,expr=inExpr,_dbg=t.dbg} -- property access
     end
   else return r end
