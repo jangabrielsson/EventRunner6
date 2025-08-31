@@ -245,7 +245,7 @@ local function PROGN(...)
   return CONT(function(cont,env)
     evalArgs(statements, function(values)
       local val = true
-      if #values > 0 then val = values[#values] end
+      if #values > 0 then val = values[#statements] end
       cont(val)
     end,env)
   end,{'progn',statements})
