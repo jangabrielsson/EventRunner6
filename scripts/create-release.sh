@@ -172,8 +172,15 @@ generate_release_notes() {
                 # Body section starts - capture any content after COMMIT_BODY
                 in_body=true
                 body_start="${line#COMMIT_BODY}"
+                # Don't capture initial body content here, let it be processed 
+                # through the normal body line processing to ensure consistent formatting
                 if [ -n "$body_start" ]; then
-                    current_body="$body_start"
+                    # Add the initial body content as if it were a separate line
+                    if [ -n "$current_body" ]; then
+                        current_body="$current_body\n$body_start"
+                    else
+                        current_body="$body_start"
+                    fi
                 fi
             elif [[ $line == "COMMIT_END" ]]; then
                 # Commit ends, process it
@@ -206,11 +213,14 @@ generate_release_notes() {
                 
                 # Add body details if they exist
                 if [ -n "$current_body" ] && [ "$current_body" != " " ]; then
-                    # Format body lines as sub-items
+                    # Use a temporary file to process body lines and avoid subshell issues
+                    temp_file=$(mktemp)
+                    echo -e "$current_body" > "$temp_file"
+                    
                     while IFS= read -r body_line; do
                         # Skip empty lines
                         if [ -n "$body_line" ] && [ "$body_line" != " " ]; then
-                            # Remove leading/trailing whitespace and add proper indentation
+                            # Remove leading/trailing whitespace
                             body_line=$(echo "$body_line" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
                             if [ -n "$body_line" ]; then
                                 # Ensure all body lines are indented as sub-items
@@ -223,7 +233,9 @@ generate_release_notes() {
                                 fi
                             fi
                         fi
-                    done <<< "$current_body"
+                    done < "$temp_file"
+                    
+                    rm "$temp_file"
                 fi
                 
                 # Reset for next commit

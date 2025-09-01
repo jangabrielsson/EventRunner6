@@ -9,7 +9,7 @@
 - ✨ **Feature**: enhance release script with preview functionality and improved commit message formatting
 - ✨ **Feature**: Enhance EventRunner6 with debug information and update view
   - Added an updateView call in EventRunner6 to display the EventRunner instance details.
-- Adjusted the save path in the updater.lua file to ensure it is saved in the 'dist' directory.
+  - Adjusted the save path in the updater.lua file to ensure it is saved in the 'dist' directory.
 
 
 ---
