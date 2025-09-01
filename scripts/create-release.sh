@@ -147,21 +147,29 @@ generate_release_notes() {
     fi
     
     # Get commit messages and format them
-    while IFS= read -r commit; do
-        if [[ $commit == feat* ]]; then
-            notes+="- ✨ **Feature**: ${commit#feat: }\n"
-        elif [[ $commit == fix* ]]; then
-            notes+="- 🐛 **Fix**: ${commit#fix: }\n"
-        elif [[ $commit == docs* ]]; then
-            notes+="- 📚 **Docs**: ${commit#docs: }\n"
-        elif [[ $commit == refactor* ]]; then
-            notes+="- ♻️ **Refactor**: ${commit#refactor: }\n"
-        elif [[ $commit == test* ]]; then
-            notes+="- 🧪 **Test**: ${commit#test: }\n"
-        else
-            notes+="- ✨ **Feature**: $commit\n"
-        fi
-    done < <(git log $commit_range --pretty=format:"%s" --no-merges)
+    local commits
+    commits=$(git log $commit_range --pretty=format:"%s" --no-merges)
+    
+    if [ -n "$commits" ]; then
+        # Process each commit message
+        while IFS= read -r commit; do
+            if [[ $commit == feat* ]]; then
+                notes+="- ✨ **Feature**: ${commit#feat: }\n"
+            elif [[ $commit == fix* ]]; then
+                notes+="- 🐛 **Fix**: ${commit#fix: }\n"
+            elif [[ $commit == docs* ]]; then
+                notes+="- 📚 **Docs**: ${commit#docs: }\n"
+            elif [[ $commit == refactor* ]]; then
+                notes+="- ♻️ **Refactor**: ${commit#refactor: }\n"
+            elif [[ $commit == test* ]]; then
+                notes+="- 🧪 **Test**: ${commit#test: }\n"
+            else
+                notes+="- ✨ **Feature**: $commit\n"
+            fi
+        done <<< "$commits"
+    else
+        notes+="- No new commits since last release\n"
+    fi
     
     notes+="\n---\n*Generated automatically from git commits*"
     
