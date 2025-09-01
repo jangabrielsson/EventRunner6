@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.6] - 2025-09-01
+
+## Changes in v0.0.6
+
+### Commits since v0.0.5:
+
+- 🐛 **Fix**: improve commit message parsing in create-release script
+- ✨ **Feature**: Update header file paths and modify rule registrations in tests
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.5] - 2025-08-31
 
 ## Changes in v0.0.5
