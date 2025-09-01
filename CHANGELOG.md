@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.0.9] - 2025-09-01
+
+## Changes in v0.0.9
+
+### Commits since v0.0.8:
+
+- ✨ **Feature**: add debug scripts for commit parsing and enhance release note generation
+- 🐛 **Fix**: remove local keyword in commit parsing loop
+  - Fixes variable scope issue that was causing improper indentation
+  - Ensures all commit body lines are processed consistently
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.8] - 2025-09-01
 
 ## Changes in v0.0.8
