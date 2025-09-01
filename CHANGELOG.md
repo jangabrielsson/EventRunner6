@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.0.8] - 2025-09-01
+
+## Changes in v0.0.8
+
+### Commits since v0.0.7:
+
+- ✨ **Feature**: enhance release script with preview functionality and improved commit message formatting
+- ✨ **Feature**: Enhance EventRunner6 with debug information and update view
+  - Added an updateView call in EventRunner6 to display the EventRunner instance details.
+- Adjusted the save path in the updater.lua file to ensure it is saved in the 'dist' directory.
+
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.7] - 2025-09-01
 
 ## Changes in v0.0.7
