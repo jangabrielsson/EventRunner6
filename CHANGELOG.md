@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.13] - 2025-09-01
+
+## Changes in v0.0.13
+
+### Commits since v0.0.12:
+
+- ✨ **Feature**: add key property to getProps for central scene event handling
+- ✨ **Feature**: add module loading functionality with priority sorting
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.12] - 2025-09-01
 
 ## Changes in v0.0.12
