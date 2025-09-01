@@ -1,8 +1,9 @@
 # EventRunner Architecture
 
 ## Overview
+EventRunner is a rule-based home automation engine that executes expressions and rules coded in [EventScript](#eventscript-language-specification)—a domain-specific language designed for home automation. EventScript allows users to define schedules, triggers, delays, and device function invocations in an intuitive, declarative manner.
 
-EventRunner is a rule-based home automation engine that executes expressions and rules coded in 'EventScript' - a domain-specific language designed for home automation. EventScript allows users to define schedules, triggers, delays, and device function invocations in an intuitive, declarative manner.
+EventRunner is developed in VSCode using [Plua](https://forum.fibaro.com/topic/79105-plua-quickapp-development/), a Lua interpreter with built-in support for QuickApp emulation.
 
 ## Core Components
 

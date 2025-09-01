@@ -695,6 +695,7 @@ Property functions use the syntax `<ID>:<property>` for reading and `<ID>:<prope
 | `temp` | Trigger | Temperature value |
 | `scene` | Trigger | Scene activation event value |
 | `central` | Trigger | Central scene event, {keyId=.., keyAttribute=...} |
+| `key` | Trigger | Central scene event, "\<keyId>:\<keyAttribute>" |
 
 ### Device Control Actions
 
