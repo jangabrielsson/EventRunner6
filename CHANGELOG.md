@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.12] - 2025-09-01
+
+## Changes in v0.0.12
+
+### Commits since v0.0.11:
+
+- ✨ **Feature**: enhance create-release script with GitHub CLI integration and artifact upload functionality
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.11] - 2025-09-01
 
 ## Changes in v0.0.11
