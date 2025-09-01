@@ -37,10 +37,27 @@ function QuickApp:refreshClicked()
   end)
 end
 
+local qa,version = nil,nil
 function QuickApp:installClicked()
+  if not version then
+    self:ERROR("Please select a version")
+    return
+  end
+  self:git_getQA('jangabrielsson','EventRunner6',"dist/EventRunner6.fqa",version,function(ok,data)
+    if not ok then 
+      self:ERROR("Failed to get EventRunner6 v%s",version)
+      return
+    end
+    local res,code = api.post("/quickApp/",data)
+    if code > 202 then 
+      self:ERROR("Failed to install EventRunner6 v%s",version)
+    else
+      self:INFO("Installed EventRunner6 v%s as ID %s",version,res.id)
+      self:refreshClicked()
+    end
+  end)
 end
 
-local qa,version = nil,nil
 function QuickApp:versionSelected(ev)
   version = ev.values[1]
   self:updateView("sel",'text',fmt("Selected: %s / %s",qa or "?",version or "?"))
@@ -68,7 +85,7 @@ function QuickApp:updateMe(id, myVersion, toVersion)
     self:error("No valid EventRunner6 ID")
     return
   end
-  self:git_getQA('jangabrielsson','EventRunner6',"EventRunner6.fqa",toVersion,function(ok,data)
+  self:git_getQA('jangabrielsson','EventRunner6',"dist/EventRunner6.fqa",toVersion,function(ok,data)
     if ok then
       self:INFO("Found version v%s", toVersion)
       local fqa = json.decode(data)

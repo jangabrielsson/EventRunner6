@@ -18,6 +18,25 @@
         "${relativeFile}"
       ],
       "listenPublicly": true
+    },
+    {
+      "name": "Plua: Run with Updater",
+      "type": "luaMobDebug",
+      "request": "launch",
+      "workingDirectory": "${workspaceFolder}",
+      "sourceBasePath": "${workspaceFolder}",
+      "listenPort": 8172,
+      "stopOnEntry": false,
+      "sourceEncoding": "UTF-8",
+      "interpreter": "/Users/jangabrielsson/Documents/dev/plua_new/plua/run.sh",
+      "arguments": [
+        "--fibaro",
+        "--run-for",
+        "60",
+        "${relativeFile}",
+        "src/updater.lua"
+      ],
+      "listenPublicly": true
     }
   ]
 }

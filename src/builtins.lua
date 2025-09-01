@@ -139,6 +139,7 @@ function ER.customDefs(er)
 
   var.QA = er.qa
   
+  -- Example of home made property object
   Weather = {}
   er.definePropClass("Weather") -- Define custom weather object
   function Weather:__init() PropObject.__init(self) end
@@ -149,6 +150,37 @@ function ER.customDefs(er)
   function Weather.trigger.humidity(prop) return {type='weather', property='Humidity'} end
   function Weather.trigger.wind(prop) return {type='weather', property='Wind'} end
   var.weather = Weather()
+
+  ------- Patch fibaro.call to track manual switches -------------------------
+  local lastID,switchMap = {},{}
+  local oldFibaroCall = fibaro.call
+  function fibaro.call(id,action,...)
+    if ({turnOff=true,turnOn=true,on=true,toggle=true,off=true,setValue=true})[action] then lastID[id]={script=true,time=os.time()} end
+    if action=='setValue' and switchMap[id]==nil then
+      local actions = (__fibaro_get_device(id) or {}).actions or {}
+      switchMap[id] = actions.turnOff and not actions.setValue
+    end
+    if action=='setValue' and switchMap[id] then return oldFibaroCall(id,({...})[1] and 'turnOn' or 'turnOff') end
+    return oldFibaroCall(id,action,...)
+  end
+  
+  local function lastHandler(ev)
+    if ev.type=='device' and ev.property=='value' then
+      local last = lastID[ev.id]
+      local _,t = fibaro.get(ev.id,'value')
+      if not(last and last.script and t-last.time <= 2) then
+        lastID[ev.id]={script=false, time=t}
+      end
+    end
+  end
+  
+  ER.sourceTrigger.eventEngine.registerCallback(lastHandler)
+  
+  function QuickApp:lastManual(id)
+    local last = lastID[id]
+    if not last then return -1 end
+    return last.script and -1 or os.time()-last.time
+  end
 end
 
 
