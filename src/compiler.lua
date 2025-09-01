@@ -275,6 +275,7 @@ local function checkArgs(a,t1,b,t2,env,e1,e2)
   if type(b) ~= t2 then env.error(fmt("%s: Expected %s, got: %s",e2,t2,b))  end
 end
 
+local T2020 = os.time{year=2020, month=1, day=1, hour=0}
 local opFuns = {
   ['add'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 + arg2 end,
   ['sub'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 - arg2 end,
@@ -290,11 +291,16 @@ local opFuns = {
   ['gte'] = function(arg1,arg2,env,e1,e2) return arg1 >= arg2 end,
   ['betw'] = function(arg1,arg2,env,e1,e2)
     checkArgs(arg1,'number',arg2,'number',env,e1,e2)
-    local ts = os.date("*t")
-    local t = ts.hour*3600 + ts.min*60 + ts.sec
-    arg2 = arg2 >= arg1 and arg2 or arg2 + 24*3600
-    t = t >= arg1 and t or t + 24*3600
-    return arg1 <= t and t <= arg2
+    if arg1 > T2020 then
+      local tn = os.time()
+      return arg1 <= tn and tn <= arg2
+    else
+      local ts = os.date("*t")
+      local t = ts.hour*3600 + ts.min*60 + ts.sec
+      arg2 = arg2 >= arg1 and arg2 or arg2 + 24*3600
+      t = t >= arg1 and t or t + 24*3600
+      return arg1 <= t and t <= arg2
+    end
   end,
   ['nilco'] = function(arg1,arg2,env,e1,e2) if arg1 ~= nil then return arg1 else return arg2 end end,
 }
