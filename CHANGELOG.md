@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.10] - 2025-09-01
+
+## Changes in v0.0.10
+
+### Commits since v0.0.9:
+
+- ✨ **Feature**: add example rule for roof sensor breach logging in event runner
+- ✨ **Feature**: enhance error handling and messaging in updater and parser modules
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.9] - 2025-09-01
 
 ## Changes in v0.0.9
