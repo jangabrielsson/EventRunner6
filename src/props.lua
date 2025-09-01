@@ -203,7 +203,7 @@ function filters.someTrue(list) return mapOr(list)  end
 function filters.mostlyTrue(list) local s = 0; for _,v in ipairs(list) do s=s+(NB(v) and 1 or 0) end return s>#list/2 end
 function filters.mostlyFalse(list) local s = 0; for _,v in ipairs(list) do s=s+(NB(v) and 0 or 1) end return s>#list/2 end
 function filters.bin(list) local s={}; for _,v in ipairs(list) do s[#s+1]=NB(v) and 1 or 0 end return s end
-function filters.id(list,ev) return next(ev) and ev.id or list end -- If we called from rule trigger collector we return whole list
+function filters.id(list,ev) return ev and next(ev) and ev.id or list end -- If we called from rule trigger collector we return whole list
 local function collect(t,m)
   if type(t)=='table' then
     for _,v in pairs(t) do collect(v,m) end
@@ -242,10 +242,6 @@ function PropObject:getTrigger(id,prop)
   local t = self.trigger[prop]
   return t and type(t) == "func".."tion" and t(self,id,prop) or type(t) == 'table' and t or nil
 end
-function PropObject:reduce(prop,value)
-  local red = self.map[prop]
-  return red(value)
-end
 function PropObject:__tostring() return self.__str end
 
 ER.PropObject = PropObject
@@ -274,13 +270,7 @@ function NumberPropObject:_setProp(prop,value)
   local r = fun(self.id,cmd,value)
   return true
 end
-function NumberPropObject:reduce(prop,value,env)
-  local gp = getProps[prop]
-  if not gp then return env.error("Unknown property: "..tostring(prop)) end
-  local red = gp[4]
-  if red == nil then return value end
-  return red(value)
-end
+function NumberPropObject:hasReduce(prop) return  (getProps[prop] or {})[4] end
 function NumberPropObject:isProp(prop) return getProps[prop] or setProps[prop] end
 function NumberPropObject:isTrigger(prop) return (getProps[prop] or {})[5] end
 function NumberPropObject:getTrigger(id, prop) return {type='device', id = self.id, property =  getProps[prop][3]} end
@@ -304,16 +294,21 @@ local function executeGetProp(obj,prop,env)
       return filter(obj, env.trigger)
     end
     if #obj == 0 then return env.error("Expected non-empty table, got empty table") end
+
     local r,fo = {},nil
     for k,v in pairs(obj) do
       local v = resolvePropObject(v)
       fo = fo or v
       if not v then return env.error("Not a prop object: "..tostring(v)) end
-      r[k] = v:_getProp(prop,env)
+      r[k] = v
     end
-    if fo then r = fo:reduce(prop,r) end
-    return r
+    local red,res = fo:hasReduce(prop)
+    if red then 
+      res = red(function(v) return v:_getProp(prop,env) end,r)
+    else res = table.mapf(function(v) return v:_getProp(prop,env) end,r) end
+    return res
   else
+    if ER.propFilters[prop] then return ER.propFilters[prop](obj, env.trigger) end
     local v = resolvePropObject(obj)
     if not v then return env.error("Not a prop object: "..tostring(v)) end
     return v:_getProp(prop,env)

@@ -49,12 +49,12 @@ function QuickApp:main(er)
 
   -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
-  -- reg('R1') rule("#foo1 => a1 = 42; post(#a1)")
-  -- rule("#a1 => if a1 == 42 then ding('R1');  HT.kitchen.light.roof:on; end")
-  -- rule("post(#foo1)")
-  
-  -- reg('R2') rule("HT.kitchen.light.roof:isOn => ding('R2')")
-  
+  reg('R1') rule("#foo1 => a1 = 42; post(#a1)")
+  rule("#a1 => if a1 == 42 then ding('R1');  HT.kitchen.light.roof:on; end")
+  rule("post(#foo1)")
+
+  reg('R2') rule("log('ID:%s',{HT.kitchen.light.roof,66,77}:isOn:id) => ding('R2')")
+
   -- reg('R3') rule("trueFor(00:00:01,HT.kitchen.light.roof:isOn) => b1 = (b1 ?? 0) + 1; again(3); if b1 == 3 then ding('R3') end")
   
   
@@ -81,8 +81,8 @@ function QuickApp:main(er)
   -- reg('R10') rule("#bar{a='$v'} => if env.p.v == 99 then ding('R10') end")
   -- rule("post(#bar{a=99})")
 
-  reg('R11') rule("#foo2 & 06:00..10:00 => ding('R11')")
-  rule("post(#foo2)")
+  -- reg('R11') rule("#foo2 & 06:00..10:00 => ding('R11')")
+  -- rule("post(#foo2)")
 
   -- rule("c1 = 0")
   -- rule("@x2 => c1 += 1; if c1 > 2 then x2 = 11:00 end; log('TIME %s',HM(now))")

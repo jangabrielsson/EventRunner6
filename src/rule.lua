@@ -310,6 +310,9 @@ function findTriggers(c, cont, env, df)
   elseif typ == 'getprop' then
     local obj = earg(c,2)
     local prop = earg(c,1)
+    if ER.propFilters[prop] then 
+      return scanArg(cont, env, df, obj)
+    end
     obj(function(values)
       if not(type(values) == 'table' and not values._isPropObject) then values = {values} end
       for _,o in ipairs(values) do

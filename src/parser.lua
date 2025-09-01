@@ -614,6 +614,7 @@ function prefixexpr(tkns,r)
   elseif t.type == 't_ddot' then
     tkns.next()
     local n = tkns.matcht('t_name',"Expected name after ':'").value
+    local pt = tkns.peek()
     if tkns.peek().type == 't_lpar' then -- method call
       local isExpr = inExpr
       local args = args(tkns)
@@ -770,7 +771,11 @@ function specOp.t_lcur(t,vals,ops,tkns)
   local tab = tablevalue(tkns)
   if tkns.matchpt('t_ddot') then
     local n = tkns.matcht('t_name',"Expected property name after :").value
-    vals.push({type='getprop',obj=tab,prop=n,expr=isExpr,_dbg=n.dbg})
+    if tkns.peek().type=='t_ddot' then
+      vals.push(prefixexpr(tkns,{type='getprop',obj=tab,prop=n,_dbg=t.dbg})) -- property access
+    else
+      vals.push({type='getprop',obj=tab,prop=n,expr=isExpr,_dbg=n.dbg})
+    end
   else
     vals.push(tab)
   end

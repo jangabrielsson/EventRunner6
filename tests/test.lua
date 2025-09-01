@@ -199,7 +199,7 @@ function QuickApp:main(er)
     -- "return {a = 8, b = 9}:leaf",{{8,9}},nil,
     -- "do local a = 0; for k,v in pairs(T2) do a += v end; return a end",{14},nil,
     -- "local a = 0; for k,v in ipairs(T2) do a += k end; return a",{10},nil
-    "return ({1,2,3,1}:bin):sum",{{1,1,1,1}},nil,
+    "hh = {1,2,3,1}; return hh:bin:sum",{4},{tree=true},
   }
   
   local function checkTriggers(rule,triggers)

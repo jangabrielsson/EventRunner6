@@ -8,6 +8,7 @@
 --%%u:{select='qa', options={}, onToggled='qaSelected'}
 --%%u:{label='sel', text=''}
 --%%u:{{button='upd', text="Update", onReleased='updateClicked'},{button='ref', text="Refresh", onReleased='refreshClicked'},{button='install', text="Install", onReleased='installClicked'}}
+--%%u:{label='msg', text=''}
 
 local VERSION = "0.0.9"
 local ER_UUID = "f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c"
@@ -16,6 +17,7 @@ local fmt = string.format
 function QuickApp:onInit()
   self:debug(self.name,self.id)
   self:updateView('sel',"text","")
+  self:updateView('msg',"text","")
   setInterval(function() self:refreshClicked() end, 60*60*1000) -- Refresh every hour
   self:refreshClicked()
 end
@@ -45,14 +47,15 @@ function QuickApp:installClicked()
   end
   self:git_getQA('jangabrielsson','EventRunner6',"dist/EventRunner6.fqa",version,function(ok,data)
     if not ok then 
-      self:ERROR("Failed to get EventRunner6 v%s",version)
+      self:ERROR(self:message("Failed to get EventRunner6 v%s",version))
       return
     end
+    data = json.decode(data)
     local res,code = api.post("/quickApp/",data)
     if code > 202 then 
-      self:ERROR("Failed to install EventRunner6 v%s",version)
+      self:ERROR(self:message("Failed to install EventRunner6 %s %s",version,data))
     else
-      self:INFO("Installed EventRunner6 v%s as ID %s.",version,res.id)
+      self:INFO(self:message("Installed EventRunner6 v%s as ID %s.",version,res.id))
       self:refreshClicked()
     end
   end)
@@ -70,7 +73,7 @@ end
 
 function QuickApp:updateClicked(ev)
   if not qa or not version then
-    self:ERROR("Please select both EventRunner6 and version")
+    self:ERROR(self:message("Please select both EventRunner6 and version"))
     return
   end
   self:updateMe(qa, nil, version)
@@ -87,23 +90,23 @@ function QuickApp:updateMe(id, myVersion, toVersion)
   end
   self:git_getQA('jangabrielsson','EventRunner6',"dist/EventRunner6.fqa",toVersion,function(ok,data)
     if ok then
-      self:INFO("Found version v%s", toVersion)
+      self:INFO(self:message("Found version v%s", toVersion))
       local fqa = json.decode(data)
       local files,main = fqa.files,nil
       for i,f in ipairs(files) do if f.isMain then main = i break end end
       if not main then
-        self:ERROR("No main file found in EventRunner6 v%s",toVersion)
+        self:ERROR(self:message("No main file found in EventRunner6 v%s",toVersion))
         return
       end
       table.remove(files,main) -- skip main
       local res,code = api.put("/quickApp/"..id.."/files", files)
-      if code > 202 then 
-        self:ERROR("Failed to update EventRunner6 v%s files",toVersion)
+      if code > 202 then
+        self:ERROR(self:message("Failed to update EventRunner6 %s files",toVersion))
         return
       end
-      self:INFO("Updated %d files",#files)
+      self:INFO(self:message("Updated %d files",#files))
     else
-      self:ERROR("Failed to get EventRunner6 v%s",toVersion)
+      self:ERROR(self:message("Failed to get EventRunner6 v%s",toVersion))
       -- Send error response
     end
   end)
@@ -134,6 +137,13 @@ function QuickApp:git_getQATags(user,repo,cb)
     end,
     error = function(err) cb(false,err) end
   })
+end
+
+function QuickApp:message(fm,...)
+  local args,str = {...},fm or ""
+  if #args > 0 then str = fmt(fm,...) end
+  self:updateView('msg','text',str)
+  return str
 end
 
 function urlencode(str) -- very useful
