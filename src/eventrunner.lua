@@ -1,5 +1,6 @@
 --%%name:EventRunner6
 --%%headers:src/include.txt
+--%%u:{label='info', text='EventRunnner 6'}
 --%%save:dist/EventRunner6.fqa
 --%%offline:true
 
@@ -19,6 +20,7 @@ end
 
 function QuickApp:onInit()
   local er = fibaro.EventRunner(self)
-  self:debug(er)
+  self:debug(er) 
+  self:updateView('info','text',tostring(er))
   er.start()
 end

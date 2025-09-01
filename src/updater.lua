@@ -2,7 +2,7 @@
 --%%type:com.fibaro.genericDevice
 --%%desktop:true
 --%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c
---%%save:ERUpdater.fqa
+--%%save:dist/ERUpdater.fqa
 --%%u:{label='l1', text="ER Updater"}
 --%%u:{select='version', options={}, onToggled='versionSelected'}
 --%%u:{select='qa', options={}, onToggled='qaSelected'}
