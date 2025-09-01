@@ -305,7 +305,7 @@ local function executeGetProp(obj,prop,env)
     local red,res = fo:hasReduce(prop)
     if red then 
       res = red(function(v) return v:_getProp(prop,env) end,r)
-    else res = table.mapf(function(v) return v:_getProp(prop,env) end,r) end
+    else res = table.map(function(v) return v:_getProp(prop,env) end,r) end
     return res
   else
     if ER.propFilters[prop] then return ER.propFilters[prop](obj, env.trigger) end
@@ -321,12 +321,12 @@ local function executeSetProp(obj,prop,value,env)
     for _,v in pairs(obj) do
       local v = resolvePropObject(v)
       if not v then return env.error("Not a prop object: "..tostring(v)) end
-      v:_setProp(prop,value)
+      v:_setProp(prop,value,env)
     end
   else
     local v = resolvePropObject(obj)
     if not v then return env.error("Not a prop object: "..tostring(v)) end
-    v:_setProp(prop,value)
+    v:_setProp(prop,value,env)
   end
 end
 

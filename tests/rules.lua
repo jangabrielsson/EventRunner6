@@ -47,7 +47,7 @@ function QuickApp:main(er)
     return 2000 
   end
 
-  -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
+  reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
   reg('R1') rule("#foo1 => a1 = 42; post(#a1)")
   rule("#a1 => if a1 == 42 then ding('R1');  HT.kitchen.light.roof:on; end")
@@ -55,34 +55,34 @@ function QuickApp:main(er)
 
   reg('R2') rule("log('ID:%s',{HT.kitchen.light.roof,66,77}:isOn:id) => ding('R2')")
 
-  -- reg('R3') rule("trueFor(00:00:01,HT.kitchen.light.roof:isOn) => b1 = (b1 ?? 0) + 1; again(3); if b1 == 3 then ding('R3') end")
+  reg('R3') rule("trueFor(00:00:01,HT.kitchen.light.roof:isOn) => b1 = (b1 ?? 0) + 1; again(3); if b1 == 3 then ding('R3') end")
   
   
-  -- triggerVar.x1 = 0
+  triggerVar.x1 = 0
   
-  -- reg('R4') rule("x1 == 42 => ding('R4')")
-  -- rule("x1 = 42")
+  reg('R4') rule("x1 == 42 => ding('R4')")
+  rule("x1 = 42")
   
-  -- reg('R5') rule("$GV1 => ding('R5')")
-  -- rule("$GV1=true")
+  reg('R5') rule("$GV1 => ding('R5')")
+  rule("$GV1=true")
   
-  -- reg('R6') rule("$$QV1 => ding('R6')")
-  -- rule("$$QV1 = true")
+  reg('R6') rule("$$QV1 => ding('R6')")
+  rule("$$QV1 = true")
   
-  -- reg('R7') rule("HT.remote:central.keyId==1 => ding('R7')")
-  -- rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
+  reg('R7') rule("HT.remote:central.keyId==1 => ding('R7')")
+  rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
   
-  -- reg('R8') rule("HT.remote:scene==S1.click => ding('R8')")
-  -- rule("click(HT.remote,S1.click)")
+  reg('R8') rule("HT.remote:scene==S1.click => ding('R8')")
+  rule("click(HT.remote,S1.click)")
   
-  -- reg('R9') rule("weather:temp == 32 => log('Temp'); ding('R9')")
-  -- api.put("/weather",{Temperature=32}) er.post({type='weather', property='Temperature', value=32},2) -- trigger weather change
+  reg('R9') rule("weather:temp == 32 => log('Temp'); ding('R9')")
+  api.put("/weather",{Temperature=32}) er.post({type='weather', property='Temperature', value=32},2) -- trigger weather change
 
-  -- reg('R10') rule("#bar{a='$v'} => if env.p.v == 99 then ding('R10') end")
-  -- rule("post(#bar{a=99})")
+  reg('R10') rule("#bar{a='$v'} => if env.p.v == 99 then ding('R10') end")
+  rule("post(#bar{a=99})")
 
-  -- reg('R11') rule("#foo2 & 06:00..10:00 => ding('R11')")
-  -- rule("post(#foo2)")
+  reg('R11') rule("#foo2 & sunrise..sunset => ding('R11')")
+  rule("post(#foo2)")
 
   -- rule("c1 = 0")
   -- rule("@x2 => c1 += 1; if c1 > 2 then x2 = 11:00 end; log('TIME %s',HM(now))")

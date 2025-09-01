@@ -123,7 +123,7 @@ local function createRule(expr, data, opts)
   local intervalEvent = mkEvent({ type = 'Interval', id = self.id })
   
   local skipTrigger = false
-  if self.daily then
+  if self.seenDaily then
     sourceTrigger:subscribe(dailyEvent,function(event) 
       self:start(event.event) 
     end)

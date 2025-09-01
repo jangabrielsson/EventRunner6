@@ -447,6 +447,13 @@ local function QVAR(name)
   end, {'qvar', name})
 end
 
+local function IVAR(name) 
+  return CONT(function(cont,env) 
+    local val = quickApp:internalStorageGet(name)
+    cont(val)
+  end, {'ivar', name})
+end
+
 local function ASSIGNM(vars,exprs)
   return CONT(function(cont,env) -- Return value out of expr
     evalArgs(exprs, function(values)
@@ -731,6 +738,7 @@ function comp.name(expr)
     return VAR(expr.value,cvar) 
   elseif expr.vt == 'gv' then return GVAR(expr.value:sub(2)) 
   elseif expr.vt == 'qv' then return QVAR(expr.value:sub(3)) 
+  elseif expr.vt == 'sv' then return IVAR(expr.value:sub(4)) 
   else error("Not implemented:"..tostring(expr.vt)) end
 end
 
@@ -817,6 +825,12 @@ function comp.assign(expr)
       local var = v.value:sub(3)
       vars[#vars+1] = function(env,val,cont,i) 
         quickApp:setVariable(var,val)
+        cont(i)
+      end
+    elseif v.vt == 'sv' then
+      local var = v.value:sub(4)
+      vars[#vars+1] = function(env,val,cont,i) 
+        quickApp:internalStorageSet(var,val)
         cont(i)
       end
     else

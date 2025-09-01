@@ -543,6 +543,11 @@ if tkns.matchpt('t_lcur') then -- OK. tableconstructor
   local tab = tablevalue(tkns)
   tkns.matcht('t_ddot',": expected for table property call")
   local n = tkns.matcht('t_name',"Expected property name after ':'").value
+  if tkns.peek().opval == 'assign' then
+    tkns.next()
+    local val = expr(tkns,exprEnd)
+    return {type='assign',vars={{type='getprop',prop=n,obj=tab,_dbg=pt.dbg}},exprs={val},_dbg=pt.dbg}
+  end
   return {type='prop',prop=n,obj=tab,_dbg=pt.dbg}
 end
 if tkns.peek().type=='num' then
