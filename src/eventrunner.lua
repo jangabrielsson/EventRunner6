@@ -1,11 +1,11 @@
 --%%name:EventRunner6
---%%headers:include.txt
---%%save:EventRunner6.fqa
+--%%headers:src/include.txt
+--%%save:dist/EventRunner6.fqa
 --%%offline:true
 
 function QuickApp:main(er)
   local rule,var = er.rule,er.variables
-  er.opts = { started = true, check = true, result = false, listTriggers=true}
+  er.opts = { started = true, check = true, result = false, triggers=true}
   
   var.HT = {
     kitchen = {

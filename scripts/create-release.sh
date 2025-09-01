@@ -209,22 +209,25 @@ update_changelog() {
 create_artifacts() {
     info "Creating release artifacts..."
     
+    # Create dist directory if it doesn't exist
+    mkdir -p dist
+    
     # Create EventRunner6.fqa
-    if [ -f "eventrunner.lua" ]; then
-        info "Creating EventRunner6.fqa..."
-        plua -t pack eventrunner.lua EventRunner6.fqa
-        success "Created EventRunner6.fqa"
+    if [ -f "src/eventrunner.lua" ]; then
+        info "Creating dist/EventRunner6.fqa..."
+        plua -t pack src/eventrunner.lua dist/EventRunner6.fqa
+        success "Created dist/EventRunner6.fqa"
     else
-        warning "eventrunner.lua not found, skipping EventRunner6.fqa"
+        warning "src/eventrunner.lua not found, skipping EventRunner6.fqa"
     fi
     
     # Create ERUpdater.fqa
-    if [ -f "updater.lua" ]; then
-        info "Creating ERUpdater.fqa..."
-        plua -t pack updater.lua ERUpdater.fqa
-        success "Created ERUpdater.fqa"
+    if [ -f "src/updater.lua" ]; then
+        info "Creating dist/ERUpdater.fqa..."
+        plua -t pack src/updater.lua dist/ERUpdater.fqa
+        success "Created dist/ERUpdater.fqa"
     else
-        warning "updater.lua not found, skipping ERUpdater.fqa"
+        warning "src/updater.lua not found, skipping ERUpdater.fqa"
     fi
 }
 
@@ -238,20 +241,20 @@ commit_and_push() {
     git add .version CHANGELOG.md
     
     # Add source files that may have been updated
-    [ -f "rule.lua" ] && git add rule.lua
-    [ -f "updater.lua" ] && git add updater.lua
-    [ -f "eventrunner.lua" ] && git add eventrunner.lua
+    [ -f "src/rule.lua" ] && git add src/rule.lua
+    [ -f "src/eventrunner.lua" ] && git add src/eventrunner.lua
+    [ -f "src/updater.lua" ] && git add src/updater.lua
     
     # Add artifacts if they exist
-    [ -f "EventRunner6.fqa" ] && git add EventRunner6.fqa
-    [ -f "ERUpdater.fqa" ] && git add ERUpdater.fqa
+    [ -f "dist/EventRunner6.fqa" ] && git add dist/EventRunner6.fqa
+    [ -f "dist/ERUpdater.fqa" ] && git add dist/ERUpdater.fqa
     
     # Commit the changes
     git commit -m "chore: release v$version
 
 - Update version to $version in all files
 - Update CHANGELOG.md with release notes
-- Generate release artifacts (EventRunner6.fqa, ERUpdater.fqa)"
+- Generate release artifacts (dist/EventRunner6.fqa, dist/ERUpdater.fqa)"
     
     success "Committed release changes"
     

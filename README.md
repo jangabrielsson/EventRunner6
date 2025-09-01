@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://raw.githubusercontent.com/jangabrielsson/EventRunner6/main/assets/logo.png" alt="EventRunner6 Logo" width="320"/>
+    <img src="https://raw.githubusercontent.com/jangabrielsson/EventRunner6/main/doc/logo.png" alt="EventRunner6 Logo" width="320"/>
 </p>
 
 # EventRunner6
@@ -156,7 +156,7 @@ er.opts = {
   started = true,      -- Log when rules start
   check = true,        -- Log rule condition results  
   result = false,      -- Log rule results
-  listTriggers = true  -- List all rule triggers
+  triggers = true      -- List all rule triggers
 }
 ```
 

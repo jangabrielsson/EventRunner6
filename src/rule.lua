@@ -159,12 +159,12 @@ local function createRule(expr, data, opts)
     if self.daily then 
       evalArg(function(values)
         if type(values) ~= 'table' then values = {values} else values = flatten(values) end
-        for i,t in ipairs(values) do printf("🕒 %02d:%02d",t//3600,t%3600//60) end
+        for i,t in ipairs(values) do printf("🕒 %02d:%02d:%02d",t//3600,t%3600//60,t%60) end
       end, self.env, table.unpack(self.daily))
     end
   end
   
-  if opts.listTriggers then self:dumpTriggers() end
+  if opts.triggers then self:dumpTriggers() end
 
   local dailyTimers = {}
   local function clearDailyTimers() for t,_ in ipairs(dailyTimers) do rclearTimeout(t) end; dailyTimers = {} end
@@ -187,7 +187,7 @@ local function createRule(expr, data, opts)
               t = t + 24*3600
               if catchFlag and start then rsetTimeout(function() self:start(dailyEvent) end,0) end -- Catch up, run immediately
             end
-            dailyTimers[rpost({type='Daily',id=self.id,time=fmt("%02d:%02d",torg//3600,torg%3600//60)},t-now)]=true
+            dailyTimers[rpost({type='Daily',id=self.id,time=fmt("%02d:%02d:%02d",torg//3600,torg%3600//60,torg%60)},t-now)]=true
           end
         end
       end, self.env, table.unpack(self.daily))
@@ -340,6 +340,7 @@ function findTriggers(c, cont, env, df)
     scanArg(cont, env, df, table.unpack(args))
   elseif typ == 'binop' then
     local op,a1,a2 = earg(c,1), earg(c,2), earg(c,3) -- ToDo: Add 1 to a2
+    a2 = ER.COMPFUNS.UNOP('add',a2,1)
     if op == 'betw' then
       if env.daily == nil then env.daily = {a1,a2}
       else 

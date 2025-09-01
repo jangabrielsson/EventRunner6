@@ -27,32 +27,46 @@ echo "Setting version to: $NEW_VERSION"
 echo "$NEW_VERSION" > .version
 echo "✓ Updated .version"
 
-# Update rule.lua
-if [ -f "rule.lua" ]; then
+# Update src/rule.lua
+if [ -f "src/rule.lua" ]; then
     # Use sed to replace the VERSION line
-    if grep -q "^local VERSION" rule.lua; then
-        sed -i.bak "s/^local VERSION = \".*\"/local VERSION = \"$NEW_VERSION\"/" rule.lua
-        rm rule.lua.bak  # Remove backup file
-        echo "✓ Updated rule.lua"
+    if grep -q "^local VERSION" src/rule.lua; then
+        sed -i.bak "s/^local VERSION = \".*\"/local VERSION = \"$NEW_VERSION\"/" src/rule.lua
+        rm src/rule.lua.bak  # Remove backup file
+        echo "✓ Updated src/rule.lua"
     else
-        echo "⚠ Warning: VERSION declaration not found in rule.lua"
+        echo "⚠ Warning: VERSION declaration not found in src/rule.lua"
     fi
 else
-    echo "⚠ Warning: rule.lua not found"
+    echo "⚠ Warning: src/rule.lua not found"
 fi
 
-# Update updater.lua
-if [ -f "updater.lua" ]; then
+# Update src/eventrunner.lua
+if [ -f "src/eventrunner.lua" ]; then
     # Use sed to replace the VERSION line
-    if grep -q "^local VERSION" updater.lua; then
-        sed -i.bak "s/^local VERSION = \".*\"/local VERSION = \"$NEW_VERSION\"/" updater.lua
-        rm updater.lua.bak  # Remove backup file
-        echo "✓ Updated updater.lua"
+    if grep -q "^local VERSION" src/eventrunner.lua; then
+        sed -i.bak "s/^local VERSION = \".*\"/local VERSION = \"$NEW_VERSION\"/" src/eventrunner.lua
+        rm src/eventrunner.lua.bak  # Remove backup file
+        echo "✓ Updated src/eventrunner.lua"
     else
-        echo "⚠ Warning: VERSION declaration not found in updater.lua"
+        echo "⚠ Warning: VERSION declaration not found in src/eventrunner.lua"
     fi
 else
-    echo "⚠ Warning: updater.lua not found"
+    echo "⚠ Warning: src/eventrunner.lua not found"
+fi
+
+# Update src/updater.lua
+if [ -f "src/updater.lua" ]; then
+    # Use sed to replace the VERSION line
+    if grep -q "^local VERSION" src/updater.lua; then
+        sed -i.bak "s/^local VERSION = \".*\"/local VERSION = \"$NEW_VERSION\"/" src/updater.lua
+        rm src/updater.lua.bak  # Remove backup file
+        echo "✓ Updated src/updater.lua"
+    else
+        echo "⚠ Warning: VERSION declaration not found in src/updater.lua"
+    fi
+else
+    echo "⚠ Warning: src/updater.lua not found"
 fi
 
 echo ""
@@ -65,9 +79,12 @@ echo "Changed files:"
 if [ -f ".version" ]; then
     echo "  .version: $(cat .version)"
 fi
-if [ -f "rule.lua" ] && grep -q "^local VERSION" rule.lua; then
-    echo "  rule.lua: $(grep "^local VERSION" rule.lua)"
+if [ -f "src/rule.lua" ] && grep -q "^local VERSION" src/rule.lua; then
+    echo "  src/rule.lua: $(grep "^local VERSION" src/rule.lua)"
 fi
-if [ -f "updater.lua" ] && grep -q "^local VERSION" updater.lua; then
-    echo "  updater.lua: $(grep "^local VERSION" updater.lua)"
+if [ -f "src/eventrunner.lua" ] && grep -q "^local VERSION" src/eventrunner.lua; then
+    echo "  src/eventrunner.lua: $(grep "^local VERSION" src/eventrunner.lua)"
+fi
+if [ -f "src/updater.lua" ] && grep -q "^local VERSION" src/updater.lua; then
+    echo "  src/updater.lua: $(grep "^local VERSION" src/updater.lua)"
 fi

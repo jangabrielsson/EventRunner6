@@ -1,6 +1,6 @@
 --%%name:ER6
 --%%offline:true
---%%headers:include.txt
+--%%headers:src/include.txt
 
 local a,b = api.post("/globalVariables/",{name="GV1",value="0"})
 

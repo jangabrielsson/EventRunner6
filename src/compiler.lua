@@ -342,7 +342,7 @@ local unOpFuns = {
 }
 
 
-local function UNOP(op, expr, v1, v2)
+local function UNOP(op, expr, v1, v2) --UNOP('add', expr, 1) end
   return CONT(function(cont, env)
     expr(function(val)
       if unOpFuns[op] then
@@ -639,6 +639,7 @@ local funs = {
   RULE = RULE
 }
 
+
 local function compError(str,expr) 
   local dbg = expr._dbg or { to = 1, from = 1}
   local from,to = dbg.from,dbg.to
@@ -894,7 +895,7 @@ local function eval(str,opts)
   local isRule = false
   local stat,ast = xpcall(function()
     local tkns = ER.tokenize(str)
-    if opts.tkns then tkns.dump() end
+    if opts.tokens then tkns.dump() end
     if tkns.containsType('t_rule') then
       table.insert(tkns.stream,1,{type='t_rulebegin',dbg={from=0,to=0}})
       table.insert(tkns.stream,{type='t_ruleend',dbg={from=0,to=0}})
@@ -921,3 +922,4 @@ end
 ER.compile = compile
 ER.eval = eval
 ER.ASYNCFUN = ASYNCFUN
+ER.COMPFUNS = funs

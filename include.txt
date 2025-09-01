@@ -1,9 +1,0 @@
---%%type:com.fibaro.genericDevice
---%%uid:f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c
---%%file:utils.lua,utils
---%%file:parser.lua,parser
---%%file:compiler.lua,compiler
---%%file:props.lua,props
---%%file:rule.lua,rule
---%%file:builtins.lua,builtin
---%%file:sim.lua,sim

@@ -1,0 +1,9 @@
+--%%type:com.fibaro.genericDevice
+--%%uid:f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c
+--%%file:src/utils.lua,utils
+--%%file:src/parser.lua,parser
+--%%file:src/compiler.lua,compiler
+--%%file:src/props.lua,props
+--%%file:src/rule.lua,rule
+--%%file:src/builtins.lua,builtin
+--%%file:src/sim.lua,sim
