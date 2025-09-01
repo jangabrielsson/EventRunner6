@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.11] - 2025-09-01
+
+## Changes in v0.0.11
+
+### Commits since v0.0.10:
+
+- ✨ **Feature**: add internal variable handling and enhance property assignment in compiler and props modules
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.10] - 2025-09-01
 
 ## Changes in v0.0.10
