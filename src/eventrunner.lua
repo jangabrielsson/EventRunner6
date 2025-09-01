@@ -15,6 +15,7 @@ function QuickApp:main(er)
     },
   }
 
+  rule("HT.kitchen.sensor.roof:breached => log('Roof sensor breached!'); HT.kitchen.light.roof:on")
   rule("@@00:00:05 => log('Ding!')")
 end
 
