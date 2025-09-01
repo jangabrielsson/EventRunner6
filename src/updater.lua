@@ -52,7 +52,7 @@ function QuickApp:installClicked()
     if code > 202 then 
       self:ERROR("Failed to install EventRunner6 v%s",version)
     else
-      self:INFO("Installed EventRunner6 v%s as ID %s",version,res.id)
+      self:INFO("Installed EventRunner6 v%s as ID %s.",version,res.id)
       self:refreshClicked()
     end
   end)
