@@ -171,7 +171,7 @@ generate_release_notes() {
             elif [[ $line == COMMIT_BODY* ]]; then
                 # Body section starts - capture any content after COMMIT_BODY
                 in_body=true
-                local body_start="${line#COMMIT_BODY}"
+                body_start="${line#COMMIT_BODY}"
                 if [ -n "$body_start" ]; then
                     current_body="$body_start"
                 fi
