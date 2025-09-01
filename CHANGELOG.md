@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.7] - 2025-09-01
+
+## Changes in v0.0.7
+
+### Commits since v0.0.6:
+
+- 🐛 **Fix**: add period to installation success message in updater fix: testing release messages
+- ✨ **Feature**: Add custom weather object and enhance fibaro.call tracking
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.6] - 2025-09-01
 
 ## Changes in v0.0.6
