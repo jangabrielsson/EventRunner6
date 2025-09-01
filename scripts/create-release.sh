@@ -2,6 +2,11 @@
 
 # create-release.sh - Automated release creation script
 # Creates GitHub releases with version bumping, changelog updates, and artifact generation
+# 
+# Usage:
+#   ./scripts/create-release.sh              # Interactive release creation
+#   ./scripts/create-release.sh --preview    # Preview release notes without creating release
+#   ./scripts/create-release.sh --dry-run    # Same as --preview
 
 set -e  # Exit on any error
 
@@ -148,23 +153,90 @@ generate_release_notes() {
     
     # Get commit messages and format them
     local commits
-    commits=$(git log $commit_range --pretty=format:"%s" --no-merges)
+    # Use a custom format to separate subject and body clearly
+    commits=$(git log $commit_range --pretty=format:"COMMIT_START%s%nCOMMIT_BODY%b%nCOMMIT_END" --no-merges)
     
     if [ -n "$commits" ]; then
         # Process each commit message
-        while IFS= read -r commit; do
-            if [[ $commit == feat* ]]; then
-                notes+="- ✨ **Feature**: ${commit#feat: }\n"
-            elif [[ $commit == fix* ]]; then
-                notes+="- 🐛 **Fix**: ${commit#fix: }\n"
-            elif [[ $commit == docs* ]]; then
-                notes+="- 📚 **Docs**: ${commit#docs: }\n"
-            elif [[ $commit == refactor* ]]; then
-                notes+="- ♻️ **Refactor**: ${commit#refactor: }\n"
-            elif [[ $commit == test* ]]; then
-                notes+="- 🧪 **Test**: ${commit#test: }\n"
-            else
-                notes+="- ✨ **Feature**: $commit\n"
+        local current_subject=""
+        local current_body=""
+        local in_body=false
+        
+        while IFS= read -r line; do
+            if [[ $line == COMMIT_START* ]]; then
+                # New commit starts
+                current_subject="${line#COMMIT_START}"
+                current_body=""
+                in_body=false
+            elif [[ $line == COMMIT_BODY* ]]; then
+                # Body section starts - capture any content after COMMIT_BODY
+                in_body=true
+                local body_start="${line#COMMIT_BODY}"
+                if [ -n "$body_start" ]; then
+                    current_body="$body_start"
+                fi
+            elif [[ $line == "COMMIT_END" ]]; then
+                # Commit ends, process it
+                local commit_type_prefix=""
+                local commit_title="$current_subject"
+                
+                # Determine commit type and format
+                if [[ $current_subject == feat* ]]; then
+                    commit_type_prefix="- ✨ **Feature**: "
+                    commit_title="${current_subject#feat: }"
+                elif [[ $current_subject == fix* ]]; then
+                    commit_type_prefix="- 🐛 **Fix**: "
+                    commit_title="${current_subject#fix: }"
+                elif [[ $current_subject == docs* ]]; then
+                    commit_type_prefix="- 📚 **Docs**: "
+                    commit_title="${current_subject#docs: }"
+                elif [[ $current_subject == refactor* ]]; then
+                    commit_type_prefix="- ♻️ **Refactor**: "
+                    commit_title="${current_subject#refactor: }"
+                elif [[ $current_subject == test* ]]; then
+                    commit_type_prefix="- 🧪 **Test**: "
+                    commit_title="${current_subject#test: }"
+                else
+                    commit_type_prefix="- ✨ **Feature**: "
+                    commit_title="$current_subject"
+                fi
+                
+                # Add the main commit line
+                notes+="$commit_type_prefix$commit_title\n"
+                
+                # Add body details if they exist
+                if [ -n "$current_body" ] && [ "$current_body" != " " ]; then
+                    # Format body lines as sub-items
+                    while IFS= read -r body_line; do
+                        # Skip empty lines
+                        if [ -n "$body_line" ] && [ "$body_line" != " " ]; then
+                            # Remove leading/trailing whitespace and add proper indentation
+                            body_line=$(echo "$body_line" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+                            if [ -n "$body_line" ]; then
+                                # Ensure all body lines are indented as sub-items
+                                if [[ $body_line == -* ]]; then
+                                    # It's already a bullet point, just indent it
+                                    notes+="  $body_line\n"
+                                else
+                                    # Add bullet point and indent
+                                    notes+="  - $body_line\n"
+                                fi
+                            fi
+                        fi
+                    done <<< "$current_body"
+                fi
+                
+                # Reset for next commit
+                current_subject=""
+                current_body=""
+                in_body=false
+            elif [ "$in_body" = true ]; then
+                # Accumulate body lines
+                if [ -n "$current_body" ]; then
+                    current_body="$current_body\n$line"
+                else
+                    current_body="$line"
+                fi
             fi
         done <<< "$commits"
     else
@@ -289,6 +361,85 @@ $release_notes"
     git push origin "v$version"
     
     success "Created and pushed tag v$version"
+}
+
+# Function to preview release notes without creating a release
+preview_release() {
+    echo -e "${CYAN}[INFO] 📋 Release Preview Mode${NC}"
+    echo ""
+    
+    # Check dependencies (but not git status since we're just previewing)
+    check_dependencies
+    
+    # Get current version
+    local current_version=$(get_current_version)
+    info "Current version: $current_version"
+    
+    # Get last release tag
+    local last_tag=$(get_last_release_tag)
+    if [ -z "$last_tag" ]; then
+        warning "No previous releases found. Will show all commits."
+        last_tag="(none)"
+    else
+        info "Last release: $last_tag"
+    fi
+    
+    # Check if there are any commits since last release
+    local commit_range
+    if [ "$last_tag" = "(none)" ]; then
+        commit_range="HEAD"
+    else
+        commit_range="$last_tag..HEAD"
+    fi
+    
+    local commits_count
+    if [ "$last_tag" = "(none)" ]; then
+        commits_count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+    else
+        commits_count=$(git rev-list --count $commit_range 2>/dev/null || echo "0")
+    fi
+    
+    info "Commits since last release: $commits_count"
+    echo ""
+    
+    if [ "$commits_count" -eq 0 ]; then
+        warning "No new commits since last release. Nothing to release."
+        return 0
+    fi
+    
+    # Show what the next versions would be
+    echo -e "${BLUE}Next version options:${NC}"
+    echo "  Patch: $current_version → $(increment_version $current_version patch)"
+    echo "  Minor: $current_version → $(increment_version $current_version minor)"
+    echo "  Major: $current_version → $(increment_version $current_version major)"
+    echo ""
+    
+    # Generate release notes for each version type
+    for version_type in "patch" "minor" "major"; do
+        local next_version=$(increment_version $current_version $version_type)
+        echo -e "${YELLOW}=== Release Notes for v$next_version ($version_type) ===${NC}"
+        
+        local release_notes
+        if [ "$last_tag" = "(none)" ]; then
+            release_notes=$(generate_release_notes "" "$next_version")
+        else
+            release_notes=$(generate_release_notes "$last_tag" "$next_version")
+        fi
+        
+        echo -e "$release_notes"
+        echo ""
+    done
+    
+    # Show recent commits for context
+    echo -e "${BLUE}Recent commits that would be included:${NC}"
+    if [ "$last_tag" = "(none)" ]; then
+        git log --oneline -10
+    else
+        git log --oneline $commit_range
+    fi
+    echo ""
+    
+    success "Preview complete! Use './scripts/create-release.sh' to create an actual release."
 }
 
 # Main function
@@ -437,5 +588,29 @@ This release includes various improvements and bug fixes."
     info "GitHub release will be available at: https://github.com/jangabrielsson/EventRunner6/releases/tag/v$new_version"
 }
 
-# Run main function
-main "$@"
+# Run main function with argument parsing
+case "${1:-}" in
+    --preview|--dry-run|-p)
+        preview_release
+        ;;
+    --help|-h)
+        echo "Usage: $0 [OPTION]"
+        echo ""
+        echo "Options:"
+        echo "  --preview, --dry-run, -p    Preview release notes without creating release"
+        echo "  --help, -h                  Show this help message"
+        echo ""
+        echo "Examples:"
+        echo "  $0                          # Interactive release creation"
+        echo "  $0 --preview                # Preview release notes"
+        echo "  $0 --dry-run                # Same as --preview"
+        ;;
+    "")
+        main "$@"
+        ;;
+    *)
+        error "Unknown option: $1"
+        echo "Use '$0 --help' for usage information."
+        exit 1
+        ;;
+esac
