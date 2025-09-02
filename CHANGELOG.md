@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.15] - 2025-09-02
+
+## Changes in v0.0.15
+
+### Commits since v0.0.14:
+
+- ✨ **Feature**: add forum post generation functionality and update release script
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.14] - 2025-09-02
 
 ## Changes in v0.0.14
