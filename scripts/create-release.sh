@@ -241,14 +241,39 @@ generate_release_notes() {
                             # Remove leading/trailing whitespace
                             body_line=$(echo "$body_line" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
                             if [ -n "$body_line" ]; then
-                                # Ensure all body lines are indented as sub-items
-                                if [[ $body_line == -* ]]; then
-                                    # It's already a bullet point, just indent it
-                                    notes+="  $body_line\n"
+                                # Check if this line is a tagged item (starts with tag:)
+                                local line_type_prefix=""
+                                local line_title="$body_line"
+                                
+                                if [[ $body_line == feat:* ]]; then
+                                    line_type_prefix="- ✨ **Feature**: "
+                                    line_title="${body_line#feat: }"
+                                elif [[ $body_line == fix:* ]]; then
+                                    line_type_prefix="- 🐛 **Fix**: "
+                                    line_title="${body_line#fix: }"
+                                elif [[ $body_line == docs:* ]]; then
+                                    line_type_prefix="- 📚 **Docs**: "
+                                    line_title="${body_line#docs: }"
+                                elif [[ $body_line == refactor:* ]]; then
+                                    line_type_prefix="- ♻️ **Refactor**: "
+                                    line_title="${body_line#refactor: }"
+                                elif [[ $body_line == test:* ]]; then
+                                    line_type_prefix="- 🧪 **Test**: "
+                                    line_title="${body_line#test: }"
                                 else
-                                    # Add bullet point and indent
-                                    notes+="  - $body_line\n"
+                                    # Regular body line - treat as sub-item
+                                    if [[ $body_line == -* ]]; then
+                                        # It's already a bullet point, just indent it
+                                        notes+="  $body_line\n"
+                                    else
+                                        # Add bullet point and indent
+                                        notes+="  - $body_line\n"
+                                    fi
+                                    continue
                                 fi
+                                
+                                # Add tagged line as main-level item
+                                notes+="$line_type_prefix$line_title\n"
                             fi
                         fi
                     done < "$temp_file"
