@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.16] - 2025-09-02
+
+## Changes in v0.0.16
+
+- ✨ **Feature**: add coercion function for comparison operators fix:  improve error handling in tokenizer feat: key property for centralSceneEvents
+- ✨ **Feature**: enhance forum post formatting and add usage instructions
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.15] - 2025-09-02
 
 ## Changes in v0.0.15
