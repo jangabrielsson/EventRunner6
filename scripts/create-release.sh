@@ -202,32 +202,45 @@ generate_release_notes() {
                 fi
             elif [[ $line == "COMMIT_END" ]]; then
                 # Commit ends, process it
-                local commit_type_prefix=""
-                local commit_title="$current_subject"
                 
-                # Determine commit type and format
-                if [[ $current_subject == feat* ]]; then
-                    commit_type_prefix="- ✨ **Feature**: "
-                    commit_title="${current_subject#feat: }"
-                elif [[ $current_subject == fix* ]]; then
-                    commit_type_prefix="- 🐛 **Fix**: "
-                    commit_title="${current_subject#fix: }"
-                elif [[ $current_subject == docs* ]]; then
-                    commit_type_prefix="- 📚 **Docs**: "
-                    commit_title="${current_subject#docs: }"
-                elif [[ $current_subject == refactor* ]]; then
-                    commit_type_prefix="- ♻️ **Refactor**: "
-                    commit_title="${current_subject#refactor: }"
-                elif [[ $current_subject == test* ]]; then
-                    commit_type_prefix="- 🧪 **Test**: "
-                    commit_title="${current_subject#test: }"
-                else
-                    commit_type_prefix="- ✨ **Feature**: "
-                    commit_title="$current_subject"
-                fi
+                # Simple approach: split on common tag boundaries  
+                # Replace " fix:" " feat:" etc. with newlines, then process each line
+                local split_subject=$(printf "%s" "$current_subject" | sed 's/ \(feat\|fix\|docs\|refactor\|test\):/\n\1:/g')
                 
-                # Add the main commit line
-                notes+="$commit_type_prefix$commit_title\n"
+                # Process each line
+                while IFS= read -r subject_line; do
+                    if [[ -n "$subject_line" && "$subject_line" != " " ]]; then
+                        local commit_type_prefix=""
+                        local commit_title="$subject_line"
+                        
+                        # Determine commit type and format
+                        if [[ $subject_line == feat:* ]]; then
+                            commit_type_prefix="- ✨ **Feature**: "
+                            commit_title="${subject_line#feat: }"
+                        elif [[ $subject_line == fix:* ]]; then
+                            commit_type_prefix="- 🐛 **Fix**: "
+                            commit_title="${subject_line#fix: }"
+                        elif [[ $subject_line == docs:* ]]; then
+                            commit_type_prefix="- 📚 **Docs**: "
+                            commit_title="${subject_line#docs: }"
+                        elif [[ $subject_line == refactor:* ]]; then
+                            commit_type_prefix="- ♻️ **Refactor**: "
+                            commit_title="${subject_line#refactor: }"
+                        elif [[ $subject_line == test:* ]]; then
+                            commit_type_prefix="- 🧪 **Test**: "
+                            commit_title="${subject_line#test: }"
+                        else
+                            commit_type_prefix="- ✨ **Feature**: "
+                            commit_title="$subject_line"
+                        fi
+                        
+                        # Clean up the title and add it
+                        commit_title=$(echo "$commit_title" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+                        if [[ -n "$commit_title" ]]; then
+                            notes+="$commit_type_prefix$commit_title\n"
+                        fi
+                    fi
+                done <<< "$split_subject"
                 
                 # Add body details if they exist
                 if [ -n "$current_body" ] && [ "$current_body" != " " ]; then
