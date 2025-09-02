@@ -20,7 +20,7 @@ local a,b = api.post("/globalVariables/",{name="GV1",value="0"})
 function QuickApp:main(er)
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
   local function loadDevice(name) return er.loadSimDevice("/Users/jangabrielsson/Documents/dev/plua_new/plua/examples/fibaro/stdQAs/"..name..".lua") end
-  er.opts = { started = true, check = true, result = false, triggers=true }
+  er.opts = { started = true, check = true, result = false, triggers=true, nolog=true }
   
   function var.click(id,val) 
     api.post("/plugins/publishEvent",{
@@ -84,9 +84,10 @@ function QuickApp:main(er)
   -- reg('R11') rule("#foo2 & sunrise..sunset => ding('R11')")
   -- rule("post(#foo2)")
 
-   reg('R12') rule("#foo3 & /08/00/00:00../09/18/00:00 => $GV1 = 'Fopp'; ding('R12')",{tokens=true})
-   rule("post(#foo3)")
+  --  reg('R12') rule("#foo3 & /08/00/00:00../09/18/00:00 => $GV1 = 'Fopp'; ding('R12')")
+  --  rule("post(#foo3)")
 
+   reg('R13') rule("#foo4{'a'} => ding('R13')").start()
   -- rule("c1 = 0")
   -- rule("@x2 => c1 += 1; if c1 > 2 then x2 = 11:00 end; log('TIME %s',HM(now))")
   -- var.r1 = rule("@@00:00:03 => log('ok')")

@@ -1,14 +1,32 @@
 fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner
 local debugFlags = ER.debugFlags
+local fmt = string.format
 
 local args = {}
 local builtin = {}
 ER.builtin = builtin
 
-function builtin.log(fm,...) 
+local function detag(str) 
+  str = str:gsub("(#C:)(.-)(#)",function(_,c) color=c return "" end)
+  if color then str=string.format("<font color='%s'>%s</font>",color,str) end
+  return str
+end
+
+function builtin.log(...) -- printable tables and #C:color# tag
+  local args,n = {...},0
+  for i=1,#args do 
+    local a = args[i]
+    local typ = type(a)
+    n = n+1
+    if typ == 'string' then args[i] = detag(a)
+    elseif typ == 'table' then 
+      if getmetatable(typ).__tostring then args[i] = tostring(a)
+      else args[i] = json.encodeFast(a) end
+    end
+  end
   local msg = ""
-  if #{...} == 0 then if fm==nil then msg="" else msg=fm end else msg =string.format(fm,...) end
+  if n == 1 then msg = args[1] elseif n > 1 then msg = string.format(table.unpack(args)) end
   print(msg)
   return msg
 end

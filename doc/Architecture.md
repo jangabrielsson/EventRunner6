@@ -12,7 +12,7 @@ EventScript is a domain-specific language for home automation that extends Lua s
 - **Rules**: `<trigger> => <actions>` - declarative automation rules
 - **Schedules**: `@sunset`, `@daily` - time-based triggers  
 - **Device Functions**: `lamp:on`, `sensor:value` - device interaction
-- **Temporal Operations**: `wait()`, `trueFor()`, between `<time1>..<time2>` - time-aware logic
+- **Temporal Operations**: `wait(<time>)`, `trueFor(<time>,<expr>)`, between `<time1>..<time2>` - time-aware logic
 
 ### 2. Rule Engine
 The rule engine is event-driven and uses selective triggering rather than polling: 

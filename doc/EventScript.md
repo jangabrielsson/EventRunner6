@@ -854,13 +854,13 @@ Defining a rules returns a rule object, that has methods for managing and contro
 ```lua
 local r = rule("triggerExpression => actions")
 
-r:disable() -- disables the rule and stops all timers started by the rule
+r.disable() -- disables the rule and stops all timers started by the rule
 
-r:enable() -- enables the rule. A daily or interval rule will start to run
+r.enable() -- enables the rule. A daily or interval rule will start to run
 
-r:start() -- trigger the rule manually
+r.start() -- trigger the rule manually
 
-r:info() -- logs info about the rule
+r.info() -- logs info about the rule
 ```
 
 ## Best Practices

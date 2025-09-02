@@ -705,20 +705,29 @@ rule("#heaterOff => HT.patio.heater:off")
    var.allLights = {54, 67, 78, 91, 92}
    rule("@23:00 => allLights:off")
    ```
-  See also: List operations (sum, average, any/all) in [EventScript.md#list-operations](EventScript.md#list-operations)
 
 3. **Use time guards**: Combine time ranges with other triggers
    ```lua
    rule("motion:breached & 22:00..06:00 => nightLight:on")
    ```
+43. **Use time guards with daily triggers**: Combine day and month ranges with daily triggers
+   ```lua
+   rule("@sunset+00:01 & wday('mon-fri') & month('june-oct') => nightLight:on")
+   ```
 
-4. **Avoid false triggers**: Use `trueFor()` for conditions that might flicker
+5. **Avoid false triggers**: Use `trueFor()` for conditions that might flicker
    ```lua
    rule("trueFor(00:05, !motion:breached) => lights:off")
    ```
   See: [EventScript.md#truefor-function](EventScript.md#truefor-function)
 
-5. **Structure complex logic**: Use custom events for multi-step processes
+6. **Kick start rules that should check at startup**: Use .start() to run rule at startup.
+      When  rule is defined, the motion sensor may already be breached, so no event will be triggering the rule (untile next time it gets breached). <rule>.start() runs the rule once when defined.
+   ```lua
+   rule("motion:breached => lights:off").start()
+   ```
+
+7. **Structure complex logic**: Use custom events for multi-step processes
    ```lua
     rule("@23:00 => post(#bedtimeRoutine)")
     rule("#bedtimeRoutine => lights:off; wait(10); security:arm")

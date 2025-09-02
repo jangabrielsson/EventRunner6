@@ -108,6 +108,9 @@ local function createRule(expr, data, opts)
   local function rpost(event,time) local ref = sourceTrigger:post(event,time,nil,hook) timers[ref] = true; return ref end
   opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
 
+  local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
+  local function timeStr(t) if t < T2020 then return fmt("%02d:%02d:%02d",t//3600,t%3600//60,t%60) else return os.date("%Y-%m-%d %H:%M:%S",t) end end
+
   opts.cont = function(...) if opts.result then opts.result(self,...) end end
   opts.err = opts.err or function(str) 
     local msg = fmt("%s: %s (disabling)", self, str) 
@@ -159,7 +162,7 @@ local function createRule(expr, data, opts)
     if self.daily then 
       evalArg(function(values)
         if type(values) ~= 'table' then values = {values} else values = flatten(values) end
-        for i,t in ipairs(values) do printf("🕒 %02d:%02d:%02d",t//3600,t%3600//60,t%60) end
+        for i,t in ipairs(values) do printf("🕒 %s",timeStr(t)) end
       end, self.env, table.unpack(self.daily))
     end
   end
@@ -187,7 +190,7 @@ local function createRule(expr, data, opts)
               t = t + 24*3600
               if catchFlag and start then rsetTimeout(function() self:start(dailyEvent) end,0) end -- Catch up, run immediately
             end
-            dailyTimers[rpost({type='Daily',id=self.id,time=fmt("%02d:%02d:%02d",torg//3600,torg%3600//60,torg%60)},t-now)]=true
+            dailyTimers[rpost({type='Daily',id=self.id,time=timeStr(torg)},t-now)]=true
           end
         end
       end, self.env, table.unpack(self.daily))
@@ -222,7 +225,7 @@ local function createRule(expr, data, opts)
     if self.disabled then return end
     if opts.started then opts.started(self,event) end
     local env = table.copyShallow(self.env)
-    env.trigger = event
+    env.trigger = event or {type='_startRule'}
     env.eventId = id
     env.locals = {env = {event = event, p = matchvars}}
     expr(opts.cont,env)
@@ -331,6 +334,7 @@ function findTriggers(c, cont, env, df)
       local eventId = "EV:"..evid
       c.evalHook = function(c,cont,env) 
         if not env.trigger then cont(false)
+        elseif env.trigger.type == '_startRule' then cont(true)
         elseif env.eventId ~= eventId then return cont(false) else
         cont(true) end
       end

@@ -439,26 +439,9 @@ local function VAR(name,cvar)
   end, {'var', name})
 end
 
-local function GVAR(name) 
-  return CONT(function(cont,env) 
-    local val = fibaro.getGlobalVariable(name)
-    cont(ER.marshallFrom(val))
-  end, {'gvar', name})
-end
-
-local function QVAR(name) 
-  return CONT(function(cont,env) 
-    local val = quickApp:getVariable(name)
-    cont(val)
-  end, {'qvar', name})
-end
-
-local function IVAR(name) 
-  return CONT(function(cont,env) 
-    local val = quickApp:internalStorageGet(name)
-    cont(val)
-  end, {'ivar', name})
-end
+local function GVAR(name) return CONT(function(cont,env) cont(ER.marshallFrom(fibaro.getGlobalVariable(name))) end, {'gvar', name}) end
+local function QVAR(name) return CONT(function(cont,env) cont(quickApp:getVariable(name)) end, {'qvar', name}) end
+local function IVAR(name) return CONT(function(cont,env) cont(quickApp:internalStorageGet(name)) end, {'ivar', name}) end
 
 local function ASSIGNM(vars,exprs)
   return CONT(function(cont,env) -- Return value out of expr
