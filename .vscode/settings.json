@@ -1,0 +1,15 @@
+{
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "file": ".vscode/.copilot-commit-message-instructions.md"
+    },
+    {
+      "text": "Use conventional commit message format with EventRunner 6 specific guidelines:\n\nFORMAT:\n- Subject line: <type>: <description>\n- Blank line after subject\n- Body: Additional tagged changes (one per line)\n\nTYPES:\n- feat: New features or functionality\n- fix: Bug fixes or corrections\n- docs: Documentation changes\n- refactor: Code restructuring without behavior changes\n- test: Adding or updating tests\n\nMULTI-TAG COMMITS:\nFor commits with multiple types of changes, use body lines:\n\nSubject: feat: implement sensor dashboard\n[BLANK LINE]\nfix: correct temperature conversion bug\ndocs: add sensor configuration guide\ntest: add sensor validation tests\n\nEXAMPLES:\nSingle change:\nfeat: add new device support for Z-Wave sensors\n\nMultiple changes:\nfeat: enhance rule engine performance\n\nfix: resolve memory leak in event processing\ndocs: update installation guide\ntest: add integration tests for MQTT\n\nIMPORTANT:\n- Use lowercase prefixes\n- Include colon and space after type\n- Keep descriptions clear and concise\n- Always add blank line before body content\n- Each body line should be a separate tagged change"
+    }
+  ],
+  "git.inputValidationLength": 72,
+  "git.inputValidationSubjectLength": 50,
+  "scm.inputFontSize": 13,
+  "scm.inputMinLineCount": 3,
+  "scm.inputMaxLineCount": 10
+}
