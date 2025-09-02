@@ -1,5 +1,26 @@
 # Changelog
 
+## [v0.0.14] - 2025-09-02
+
+## Changes in v0.0.14
+
+### Commits since v0.0.13:
+
+- ✨ **Feature**: Refactor EventScript documentation and improve built-in logging functionality
+  - Updated documentation in Architecture.md to clarify temporal operations syntax.
+  - Corrected method calls in EventScript.md to use dot notation for rule methods.
+  - Enhanced Tutorial.md with additional best practices for using time guards and rule initialization.
+  - Improved logging functionality in builtins.lua to handle color tags and table serialization.
+  - Introduced compatibility module in compater5.lua for loading modules with priority.
+  - Streamlined variable retrieval functions in compiler.lua for better readability.
+  - Modified rule.lua to improve time formatting in daily triggers and rule initialization.
+  - Updated tests/rules.lua to include new rule registration and initialization practices.
+- ✨ **Feature**: add long time-based condition to 'betw' operation
+- ✨ **Feature**: update architecture documentation and add key property to EventScript triggers
+
+---
+*Generated automatically from git commits*
+
 ## [v0.0.13] - 2025-09-01
 
 ## Changes in v0.0.13
