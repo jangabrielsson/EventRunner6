@@ -164,7 +164,9 @@ local function createRule(expr, data, opts)
     if self.daily then 
       evalArg(function(values)
         if type(values) ~= 'table' then values = {values} else values = flatten(values) end
-        for i,t in ipairs(values) do printf("🕒 %s",timeStr(t)) end
+        for i,t in ipairs(values) do 
+          if t ~= catch then printf("🕒 %s",timeStr(t)) end
+        end
       end, self.env, table.unpack(self.daily))
     end
   end

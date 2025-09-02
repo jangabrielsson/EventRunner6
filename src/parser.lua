@@ -451,6 +451,7 @@ function stat(tkns)
     else -- OK. varlist ‘=’ exprlist
       local vl = varlist(tkns,v)
       --local t = tkns.match('opval','assign',"Expected '=' in assignment")
+      local t = tkns.peek()
       if not tkns.matchp('opval','assign') then 
         perror("Expected '=' in assignment",stp) 
       end

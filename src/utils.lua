@@ -287,9 +287,14 @@ local function dateTest(dateStr0)
   end
 end
 
+ER.eventFormatter = {}
 --------------- Event engine -------------------
 local EventMT = { 
   __tostring = function(ev)
+    if ER.eventFormatter[ev.type or ""] then
+      local f = ER.eventFormatter[ev.type or ""](ev)
+      if f then return f end
+    end
     local s = json.encodeFast(ev)
     if s:sub(1,1)=='#' then return s end
     local m = s:match("^.-,(.*)}$") or ""
