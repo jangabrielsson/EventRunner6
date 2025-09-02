@@ -169,12 +169,6 @@ generate_release_notes() {
     
     local notes="## Changes in v$new_version\n\n"
     
-    if [ -n "$last_tag" ]; then
-        notes+="### Commits since $last_tag:\n\n"
-    else
-        notes+="### All commits:\n\n"
-    fi
-    
     # Get commit messages and format them
     local commits
     # Use a custom format to separate subject and body clearly
@@ -279,7 +273,7 @@ generate_release_notes() {
         notes+="- No new commits since last release\n"
     fi
     
-    notes+="\n---\n*Generated automatically from git commits*"
+    notes+="\n\n*Generated automatically from git commits*"
     
     echo -e "$notes"
 }

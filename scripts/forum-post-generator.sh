@@ -7,7 +7,23 @@ generate_forum_post() {
     local github_url="https://github.com/jangabrielsson/EventRunner6"
     
     # Convert markdown-style formatting for HTML display
-    local formatted_notes=$(echo "$release_notes" | sed 's/\*\*/\<strong\>/g; s/\*\*/\<\/strong\>/g')
+    local formatted_notes=$(echo "$release_notes" | \
+        sed 's/^### \(.*\)/<h4>\1<\/h4>\n/g' | \
+        sed 's/^## \(.*\)/<h3>\1<\/h3>\n/g' | \
+        sed 's/^- \(.*\)/<li>\1<\/li>/g' | \
+        sed 's/^\* \(.*\)/<li>\1<\/li>/g' | \
+        sed 's/^\*\(.*\)\*$/<p><em>\1<\/em><\/p>/g' | \
+        awk 'BEGIN{in_list=0} 
+             /^<li>/ {
+                 if(!in_list){print "<ul>"; in_list=1} 
+                 print; next
+             } 
+             {
+                 if(in_list){print "</ul>"; in_list=0} 
+                 if($0 != "") print
+             } 
+             END{if(in_list)print "</ul>"}' | \
+        sed 's/\*\*/\<strong\>/g; s/\*\*/\<\/strong\>/g')
     
     # Create HTML forum post in doc/notes directory (using temp file to avoid race conditions)
     local temp_file=$(mktemp)
@@ -86,12 +102,8 @@ $formatted_notes
 
 <h3>📚 <strong>Documentation</strong></h3>
 <ul>
-<li><strong>Tutorial</strong>: <a href="$github_url/blob/main/doc/Tutorial.md">$github_url/blob/main/doc/Tutorial.md</a></li>
-<li><strong>EventScript Reference</strong>: <a href="$github_url/blob/main/doc/EventScript.md">$github_url/blob/main/doc/EventScript.md</a></li>
+<li><strong>Full Documentation</strong>: <a href="$github_url/blob/main/README.md">$github_url/blob/main/README.md</a></li>
 </ul>
-
-<h3>🔄 <strong>Upgrade Notes</strong></h3>
-<p>See the full changelog and upgrade instructions in the GitHub release.</p>
 
 <hr>
 <p><em>This release was automatically generated from commit $(git rev-parse --short HEAD)</em></p>
@@ -145,3 +157,14 @@ EOF
 
 # Export function for use in release script
 export -f generate_forum_post
+
+# If script is run directly (not sourced), call the function
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    if [ $# -ne 2 ]; then
+        echo "Usage: $0 <version> <release_notes>"
+        echo "Example: $0 1.0.0 'Bug fixes and improvements'"
+        exit 1
+    fi
+    
+    generate_forum_post "$1" "$2"
+fi
