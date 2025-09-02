@@ -52,6 +52,8 @@ function QuickApp:main(er)
   rule("log('Temperature is %s°',weather:temp)")
   rule("log('Wind is %sms',weather:wind)")
   
+  rule("dialWheel:value => log('Dial:%s',dialWheel:value)")
+  rule("dialBtn:key => log('Dial button %s',dialBtn:key)")
 end
 
 function QuickApp:onInit()
