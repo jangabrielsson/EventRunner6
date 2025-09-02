@@ -69,7 +69,7 @@ function QuickApp:main(er)
   -- reg('R6') rule("$$QV1 => ding('R6')")
   -- rule("$$QV1 = true")
   
-  reg('R7') rule("HT.remote:key=='2:Pressed' => ding('R7')")
+  reg('R7') rule("HT.remote:key=='1:Pressed' => print(A.foo); ding('R7')")
   rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
   
   -- reg('R8') rule("HT.remote:scene==S1.click => ding('R8')")

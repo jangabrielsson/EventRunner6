@@ -386,7 +386,7 @@ local function CALL(fun,...)
             cont(table.unpack(res))
           end
         end,env)
-      else env.error(fmt("%s: Expected function, got: %s", fun, tostring(fval))) end
+      else env.error(fmt("%s: Expected function, got: %s", tostring(fun), tostring(fval))) end
     end, env)
   end, {'call', fun, args})
 end
@@ -396,7 +396,7 @@ local function CALLOBJ(obj, fun, ...)
   return CONT(function(cont,env) -- Return value out of expr
     obj(function(objval)
       if type(objval) ~= 'table' then
-        return env.error(fmt("%s: Expected table for :call, got: %s", fun, tostring(objval)))
+        return env.error(fmt("%s: Expected table for :call, got: %s - %s", tostring(fun), tostring(objval), tostring(obj)))
       end
       local fval = objval[fun]
       local isCont = isContFun(fval)
@@ -409,7 +409,7 @@ local function CALLOBJ(obj, fun, ...)
             cont(table.unpack(res))
           end
         end,env)
-      else env.error(fmt("%s: Expected function, got: %s", fun, tostring(fval))) end
+      else env.error(fmt("%s: Expected function, got: %s - %s", tostring(fun), tostring(fval), tostring(fun))) end
     end, env)
   end, {'call', fun, args})
 end
@@ -430,7 +430,7 @@ local function AREF(tab,key)
         key(function(k)
           cont(t[k])
         end,env)
-      else env.error("Expected table, got: "..tostring(t)) end
+      else env.error(fmt("Expected table, got: %s - %s.%s",tostring(t),tostring(tab),tostring(key))) end
     end,env)
   end, {'aref', tab, key})
 end
@@ -503,11 +503,11 @@ local function ASYNCFUN(fun) --- fun(cb,...)
     if timeout >= 0 then
       ref = env:setTimeout(function() 
         timedout = true
-        env.error("Async function timeout after "..timeout.." ms")
-        end, timeout)
-      end
-    end)
-  end
+        env.error(fmt("%s: Async function timeout after %s ms", tostring(fun), tostring(timeout)))
+      end, timeout)
+    end
+  end)
+end
 
 local function FUNC(params, body)
   return CONT(function(cont,env) -- Return value out of expr
