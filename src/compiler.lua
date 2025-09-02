@@ -276,6 +276,8 @@ local function checkArgs(a,t1,b,t2,env,e1,e2)
 end
 
 local T2020 = os.time{year=2020, month=1, day=1, hour=0}
+local function coerce(a) if type(a) == 'table' then local mt=getmetatable(a) if mt and mt.__tostring then return mt.__tostring(a) end end return a end
+
 local opFuns = {
   ['add'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 + arg2 end,
   ['sub'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 - arg2 end,
@@ -283,12 +285,12 @@ local opFuns = {
   ['div'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 / arg2 end,
   ['mod'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 % arg2 end,
   ['pow'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 ^ arg2 end,
-  ['eq'] = function(arg1,arg2,env,e1,e2) return arg1 == arg2 end,
-  ['neq'] = function(arg1,arg2,env,e1,e2) return arg1 ~= arg2 end,
-  ['lt'] = function(arg1,arg2,env,e1,e2) return arg1 < arg2 end,
-  ['lte'] = function(arg1,arg2,env,e1,e2) return arg1 <= arg2 end,
-  ['gt'] = function(arg1,arg2,env,e1,e2) return arg1 > arg2 end,
-  ['gte'] = function(arg1,arg2,env,e1,e2) return arg1 >= arg2 end,
+  ['eq'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 == arg2 end,
+  ['neq'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 ~= arg2 end,
+  ['lt'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 < arg2 end,
+  ['lte'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 <= arg2 end,
+  ['gt'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 > arg2 end,
+  ['gte'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 >= arg2 end,
   ['betw'] = function(arg1,arg2,env,e1,e2)
     checkArgs(arg1,'number',arg2,'number',env,e1,e2)
     if arg1 > T2020 then
@@ -907,8 +909,10 @@ local function eval(str,opts)
     ast,j,k = ER.parse(tkns)
     return ast
   end,function(e)
-    local info = debug.getinfo(2)
-    dbg = debug.traceback()
+    if fibaro.plua then 
+      local info = debug.getinfo(2)
+       dbg = debug.traceback()
+    end
     return e
   end)
   if not stat then print(ast) return idfun end

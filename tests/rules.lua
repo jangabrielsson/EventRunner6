@@ -69,8 +69,8 @@ function QuickApp:main(er)
   -- reg('R6') rule("$$QV1 => ding('R6')")
   -- rule("$$QV1 = true")
   
-  -- reg('R7') rule("HT.remote:central.keyId==1 => ding('R7')")
-  -- rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
+  reg('R7') rule("HT.remote:key=='2:Pressed' => ding('R7')")
+  rule("fibaro.call(HT.remote,'emitCentralSceneEvent',1,'Pressed')")
   
   -- reg('R8') rule("HT.remote:scene==S1.click => ding('R8')")
   -- rule("click(HT.remote,S1.click)")
@@ -87,7 +87,7 @@ function QuickApp:main(er)
   --  reg('R12') rule("#foo3 & /08/00/00:00../09/18/00:00 => $GV1 = 'Fopp'; ding('R12')")
   --  rule("post(#foo3)")
 
-   reg('R13') rule("#foo4{'a'} => ding('R13')").start()
+  --  reg('R13') rule("#foo4{'a'} => ding('R13')").start()
   -- rule("c1 = 0")
   -- rule("@x2 => c1 += 1; if c1 > 2 then x2 = 11:00 end; log('TIME %s',HM(now))")
   -- var.r1 = rule("@@00:00:03 => log('ok')")
@@ -101,7 +101,19 @@ function QuickApp:main(er)
   -- rule("#foo{a='$a>8'} => log('OK: %s',env.p.a)")
   -- rule("post(#foo{a=9},+/00:00:10)")
   
+  -- rule([[/12/21/00:00../03/21/00:00 =>
+-- $Jaar_Getijde = 'Winter';
+-- log('#C:pink#$Jaar_Getijde = Winter');
+-- log('64-A');
+-- wait(0)
+-- ]])
 
+-- rule([[ @10:00 => return "
+     
+--        foo
+-- ]])
+
+  -- rule("@foo => = fooo")
 end
 
 function QuickApp:onInit()

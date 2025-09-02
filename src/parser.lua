@@ -53,15 +53,39 @@ local opers0 = ER._opers
 local opers1 = {} for k,v in pairs(opers0) do opers1[v.trans] = v end
 ER._opers1 = opers1
 
+local function calcLineOffs(lines, pos)
+  local line,offs,llength = 1,0,0
+  for i, l in ipairs(lines) do
+    local len = #l + 1
+    if pos <= offs + len then
+      line = i; llength = #l
+      break
+    end
+    offs = offs + len
+  end
+  return line, pos - offs, llength
+end
+
 local TKMT = {__tostring = function (err) 
   if type(err) == 'string' then return err end
   local src = err.src or ""
-  local ptr = string.rep(' ',err.from-1)..string.rep('^',err.to-err.from+1)
-  return fmt("%s: %s at pos %d\n%s\n%s\n",err.type,err.msg,err.from,src,ptr)
+  local lines,buff = {},{}
+  for line in src:gmatch("([^\n]*)\n?") do lines[#lines+1]=line end
+  local startline,startoffs,startLength = calcLineOffs(lines, err.from)
+  local endline,endoffs,endLength = calcLineOffs(lines, err.to)
+  if startline == endline then
+    local line = lines[startline] or ""
+    local ptr = string.rep('&nbsp;',startoffs-1)..fmt("<font color='orange'>%s</font>",string.rep('^',endoffs-startoffs+1))
+    buff[#buff+1] = fmt("%s: %s at pos %d",err.type,err.msg,err.from)
+    if startline > 1 then buff[#buff+1] = lines[1] end
+    buff[#buff+1] = line
+    buff[#buff+1] = ptr
+    return table.concat(buff,"<br>")
+  end
 end}
 
 local function createError(typ,msg,from,to,src,mt)
-  return setmetatable({type=typ, msg=msg, from=from, to=to, src=src},mt or TKMT)
+  return setmetatable({type=typ, msg=msg, from=from, to=to, src=src, _err=true},mt or TKMT)
 end
 local function perror(typ,msg,from,to,src,mt) error(createError(typ,msg,from,to,src,mt)) end
 ER.createParseError = createError
@@ -96,10 +120,14 @@ local function stream(tab,src)
   return self
 end
 
+local GCTX
 local function toTimeDate(str)
   local y,m,d,h,min,s=str:match("(%d?%d?%d?%d?)/?(%d+)/(%d+)/(%d%d):(%d%d):?(%d?%d?)")
-  local t = os.date("*t")
-  return os.time{year=y~="" and y or t.year,month=m,day=d,hour=h,min=min,sec=s~="" and s or 0}
+  local stat,res = pcall(function()
+    local t = os.date("*t")
+    return os.time{year=y~="" and y or t.year,month=m,day=d,hour=h,min=min,sec=s~="" and s or 0}
+  end)
+  if stat then return res else perror('Tokenizer',"Bad long time format",GCTX.from,GCTX.to,GCTX.source) end
 end
 local function toTime(str)
   local h,m,s = str:match("(%d%d):(%d%d):?(%d*)")
@@ -212,6 +240,7 @@ end
 
 local function tokenize(src)
   local ctx = { source = src, tokens = {}, cursor = 0 }
+  GCTX = ctx
   local stat,res = pcall(function()
     while #ctx.source>0 and dispatch(ctx.source:sub(1,1),ctx) do end
     if #ctx.source > 0 then 
@@ -219,7 +248,11 @@ local function tokenize(src)
     end
   end)
   if not stat then
-    perror('Tokenizer',res or "",ctx.from,ctx.to,src)
+    if type(res) == 'table' and res._err then 
+      return error(res)
+    else 
+      perror('Tokenizer',res or "",ctx.from,ctx.to,src)
+    end
   end
   return ctx.tokens
 end
@@ -401,8 +434,9 @@ local caseEnd = mapT{'t_end','t_||'}
 function stat(tkns)
   local pt = tkns.peek().type
   if tkns.matchpt('t_semi') then return end
-  
+  local stp = tkns.peek()
   if tkns.peek().type == 't_name' then 
+    local stp = tkns.peek()
     local n = tkns.matcht('t_name')
     local v = prefixexpr(tkns,{type='name',value=n.value,_dbg=n.dbg,vt=varType(n.value)})
     if v.type=='call' or v.type == 'objcall' then 
@@ -416,7 +450,10 @@ function stat(tkns)
       return v
     else -- OK. varlist ‘=’ exprlist
       local vl = varlist(tkns,v)
-      local t = tkns.match('opval','assign',"Expected '=' in assignment")
+      --local t = tkns.match('opval','assign',"Expected '=' in assignment")
+      if not tkns.matchp('opval','assign') then 
+        perror("Expected '=' in assignment",stp) 
+      end
       local e = exprlist(tkns)
       return {type='assign',vars=vl,exprs=e,_dbg=t.dbg}
     end

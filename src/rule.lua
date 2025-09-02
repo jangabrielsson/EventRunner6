@@ -109,7 +109,9 @@ local function createRule(expr, data, opts)
   opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
 
   local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
-  local function timeStr(t) if t < T2020 then return fmt("%02d:%02d:%02d",t//3600,t%3600//60,t%60) else return os.date("%Y-%m-%d %H:%M:%S",t) end end
+  local function timeStr(t) 
+    if t < T2020 then return fmt("%02d:%02d:%02d",t//3600,t%3600//60,t%60) else return os.date("%Y-%m-%d %H:%M:%S",t) end
+  end
 
   opts.cont = function(...) if opts.result then opts.result(self,...) end end
   opts.err = opts.err or function(str) 
