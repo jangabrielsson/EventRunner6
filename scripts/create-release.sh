@@ -456,6 +456,25 @@ create_github_release() {
     success "GitHub release created successfully!"
     local repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
     info "Release URL: https://github.com/$repo_info/releases/tag/v$version"
+    
+    # Generate forum post content
+    info "📝 Generating forum post..."
+    mkdir -p doc/notes
+    ./scripts/forum-post-generator.sh "$version" "$release_notes"
+    
+    # Open the forum post directly in browser
+    if command -v open >/dev/null 2>&1; then
+        open "doc/notes/release-v$version.html"
+        info "🌐 Forum post opened in your default browser"
+    elif command -v code >/dev/null 2>&1; then
+        code "doc/notes/release-v$version.html"
+        info "📝 File opened in VS Code"
+    else
+        info "💡 Open doc/notes/release-v$version.html in your browser"
+    fi
+    
+    info "📖 Forum post available at: doc/notes/release-v$version.html"
+    info "📋 Ready to copy and paste to Fibaro Forum!"
 }
 
 # Function to preview release notes without creating a release
@@ -705,12 +724,37 @@ case "${1:-}" in
         echo ""
         echo "Options:"
         echo "  --preview, --dry-run, -p    Preview release notes without creating release"
+        echo "  --forum-only <version>      Generate forum post for existing release"
         echo "  --help, -h                  Show this help message"
         echo ""
         echo "Examples:"
         echo "  $0                          # Interactive release creation"
         echo "  $0 --preview                # Preview release notes"
         echo "  $0 --dry-run                # Same as --preview"
+        echo "  $0 --forum-only 1.0.0       # Generate forum post for v1.0.0"
+        ;;
+    "--forum-only")
+        if [ -z "$2" ]; then
+            error "Version required for --forum-only option"
+            exit 1
+        fi
+        
+        # Generate forum post for existing release
+        info "📝 Generating forum post for version $2..."
+        
+        # Ensure output directory exists
+        mkdir -p doc/notes
+        
+        # Generate the forum post content
+        ./scripts/forum-post-generator.sh "$2" "$(gh release view "v$2" --json body --jq '.body' 2>/dev/null || echo 'Release notes not available')"
+        
+        # Open browser with forum post
+        info "🌐 Opening forum post in browser..."
+        open "doc/notes/release-v$2.html"
+        
+        info "📖 Forum post available at: doc/notes/release-v$2.html"
+        info "📋 Ready to copy and paste to Fibaro Forum!"
+        exit 0
         ;;
     "")
         main "$@"
