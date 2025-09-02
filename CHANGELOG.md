@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.0.19] - 2025-09-02
+
+## Changes in v0.0.19
+
+- ✨ **Feature**: add uptime tracking and event formatting
+- 🐛 **Fix**: correct assignment error in parser
+- ♻️ **Refactor**: improve rule handling and logging
+- 🧪 **Test**: add usage examples for QuickApp
+- ✨ **Feature**: add commit message guidelines and VS Code settings
+- 📚 **Docs**: include examples and formatting rules for conventional commits
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.18] - 2025-09-02
 
 ## Changes in v0.0.18
