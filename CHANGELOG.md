@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.17] - 2025-09-02
+
+## Changes in v0.0.17
+
+- 🐛 **Fix**: correct remote key condition in rule for R7 fix: better error message for array ref with nil table
+- ✨ **Feature**: enhance release notes generation and add commit message tagging guidelines
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.16] - 2025-09-02
 
 ## Changes in v0.0.16
