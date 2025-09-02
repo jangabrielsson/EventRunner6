@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.18] - 2025-09-02
+
+## Changes in v0.0.18
+
+- 🐛 **Fix**: adjusted formatting for error messages in console
+- ✨ **Feature**: add HTML forum post generator and release notes for v0.0.17
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.17] - 2025-09-02
 
 ## Changes in v0.0.17
