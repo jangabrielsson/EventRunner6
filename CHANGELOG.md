@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.22] - 2025-09-03
+
+## Changes in v0.0.22
+
+- ♻️ **Refactor**: improve error handling in rule definitions
+- ♻️ **Refactor**: update loadLibrary function scope
+- ♻️ **Refactor**: enhance block parsing logic
+- 🐛 **Fix**: bug in case statement fixed
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.21] - 2025-09-03
 
 ## Changes in v0.0.21
