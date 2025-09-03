@@ -32,14 +32,23 @@ Additional functions and utilities to extend EventRunner 6 functionality.
   - [Example Complete Add-on File](#example-complete-add-on-file)
 
 ## Setup
-Add a file to the EventRunner 6 QuickApp with a global `loadLibrary` function:
+Add a file to the EventRunner 6 QuickApp with a local `loadLibrary` function:
+
+```lua
+local function loadLibrary(er)
+   -- Your add-on functions defined here
+end
+
+setTimeout(function() fibaro.loadLibrary(loadLibrary) end,0)
+```
+
+Alternatively, declare a global lua function and load the library manually from 'main'
 
 ```lua
 function loadLibrary(er)
    -- Your add-on functions defined here
 end
 ```
-
 Then in the 'main' file do:
 
 ```lua
@@ -48,6 +57,7 @@ function QuickApp:main(er)
   -- Rest of your rules go here
 end
 ```
+
 
 ## System Information
 
@@ -425,29 +435,9 @@ er.variables.defVars = er.defVars
 Here's a complete example of how to structure your add-on file:
 
 ```lua
-function loadLibrary(er)
+local function loadLibrary(er)
   -- System information
   er.variables.QA = er.qa
-  
-  -- Enhanced logging
-  er.logLevel = "INFO"
-  er.logLevels = {DEBUG = 1, INFO = 2, WARNING = 3, ERROR = 4}
-  
-  function er.log(level, message, category)
-    if er.logLevels[level] >= er.logLevels[er.logLevel] then
-      local timestamp = os.date("%Y-%m-%d %H:%M:%S")
-      local prefix = string.format("[%s] [%s]", timestamp, level)
-      if category then prefix = prefix .. " [" .. category .. "]" end
-      
-      local logFunc = er.debug
-      if level == "INFO" then logFunc = er.info
-      elseif level == "WARNING" then logFunc = er.warning
-      elseif level == "ERROR" then logFunc = er.error
-      end
-      
-      logFunc(prefix .. " " .. message)
-    end
-  end
   
   -- Variable helpers
   function er.defVars(tab) 
@@ -457,27 +447,12 @@ function loadLibrary(er)
   end
   er.variables.defVars = er.defVars
   
-  -- Smart notifications
-  er.notificationLimits = {}
-  function er.smartNotify(message, category, limitMinutes)
-    category = category or "general"
-    limitMinutes = limitMinutes or 60
-    
-    local now = os.time()
-    local lastSent = er.notificationLimits[category] or 0
-    
-    if now - lastSent > (limitMinutes * 60) then
-      er.info(message)
-      er.notificationLimits[category] = now
-      return true
-    end
-    return false
-  end
-  
   -- Add your custom functions here...
   
-  er.log("INFO", "Add-on library loaded successfully", "system")
+  print("Add-on library loaded successfully")
 end
+
+setTimeout(function() fibaro.loadLibrary(loadLibrary) end,0)
 ```
 
 This add-on system provides a comprehensive set of utilities to extend EventRunner 6 with additional functionality while maintaining clean separation and modularity.

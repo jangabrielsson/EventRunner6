@@ -115,7 +115,7 @@ function QuickApp:main(er)
 
   -- rule("@foo => = fooo")
 
-  rule("global('Test')")
+  rule("elog('HC3 uptime %s',uptimeStr)")
 end
 
 function QuickApp:onInit()

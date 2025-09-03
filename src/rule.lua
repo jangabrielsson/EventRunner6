@@ -251,7 +251,7 @@ local function defRule(expr, opts)
     triggers = {},
     daily = nil,
     interval = nil,
-    error = function(str) ERROR("❌ Rule %d: %s '%s'", id, str, src:gsub("%s*\n%s*"," ") // 80) os.exit() end, -- Only used when checking triggers
+    error = function(str) ERROR("❌ Rule %s: %s '%s'", tostring(id), tostring(str), src:gsub("%s*\n%s*"," ") // 80) os.exit() end, -- Only used when checking triggers
   }) do env[k] = v end
   
   local function cont()
@@ -484,3 +484,5 @@ setmetatable(ER,{
   __tostring = function() return fmt("EventRunner6 v%s",VERSION) end,
   __call = function(_,qa) return createER(qa) end
 })
+
+function fibaro.loadLibrary(lf) setTimeout(function() lf(fibaro.EventRunner._er) end,0) end

@@ -98,4 +98,4 @@ local function loadFuns(er)
 
 end
 
-setTimeout(function() loadFuns(fibaro.EventRunner._er) end,0)
+setTimeout(function() fibaro.loadLibrary(loadFuns) end,0)
