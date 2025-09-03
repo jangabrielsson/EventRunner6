@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.0.21] - 2025-09-03
+
+## Changes in v0.0.21
+
+- ✨ **Feature**: update add-on setup instructions and examples
+- ♻️ **Refactor**: change loadLibrary function to local scope
+- ♻️ **Refactor**: improve error handling in rule definitions
+- ✨ **Feature**: add synchronous HTTP call functionality
+- ✨ **Feature**: implement HC3 API integration
+- ♻️ **Refactor**: update HTTP client authorization handling
+- 📚 **Docs**: add release notes for v0.0.20
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.20] - 2025-09-03
 
 ## Changes in v0.0.20
