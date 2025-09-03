@@ -64,7 +64,7 @@ function builtin.ostime(t) return os.time(t) end
 function builtin.global(name)
   local s = fibaro.getGlobalVariable(name)     
   api.post("/globalVariables/",{name=name})
-   return s == nil
+  return s == nil,(s == nil and fmt("'%s' created",name) or fmt("'%s' exists",name))
 end
 
 function builtin.listglobals() return api.get("/globalVariables") end
@@ -154,27 +154,6 @@ function ER.customDefs(er)
   
   var.S1 = {click = "16", double = "14", tripple = "15", hold = "12", release = "13"}
   var.S2 = {click = "26", double = "24", tripple = "25", hold = "22", release = "23"}
-
-  var.QA = er.qa
-  local uptime = os.time() - api.get("/settings/info").serverStatus
-  local uptimeStr = fmt("%d days, %d hours, %d minutes",uptime // (24*3600),(uptime % 24*3600) // 3600, (uptime % 3600) // 60)
-  var.uptime = uptime
-  var.uptimeStr = uptimeStr
-  var.uptimeMinutes = uptime // 60
-  
-  -- Example of home made property object
-  Weather = {}
-  er.definePropClass("Weather") -- Define custom weather object
-  function Weather:__init() PropObject.__init(self) end
-  function Weather.getProp.temp(prop,env) return api.get("/weather").Temperature end
-  function Weather.getProp.humidity(prop,env) return  api.get("/weather").Humidity end
-  function Weather.getProp.wind(prop,env) return  api.get("/weather").Wind end
-  function Weather.getProp.condition(prop,env) return  api.get("/weather").WeatherCondition end
-  function Weather.trigger.temp(prop) return {type='weather', property='Temperature'} end
-  function Weather.trigger.humidity(prop) return {type='weather', property='Humidity'} end
-  function Weather.trigger.wind(prop) return {type='weather', property='Wind'} end
-  function Weather.trigger.condition(prop) return {type='weather', property='WeatherCondition'} end
-  var.weather = Weather()
 
   ------- Patch fibaro.call to track manual switches -------------------------
   local lastID,switchMap = {},{}

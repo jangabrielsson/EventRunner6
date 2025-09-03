@@ -456,13 +456,15 @@ function createER(qa)
     return ER.eval(str,opts)() 
   end
   function _er.start() 
-    setupVariables(_er)
-    midnightLoop(_er)
-    ER.customDefs(_er)
-    print("=========== Loading rules ================")
-    local t0 = os.clock()
-    _er.qa:main(_er) 
-    printf("=========== Load time: %.3fs ============",os.clock()-t0)
+    setTimeout(function()
+      setupVariables(_er)
+      midnightLoop(_er)
+      ER.customDefs(_er)
+      print("=========== Loading rules ================")
+      local t0 = os.clock()
+      _er.qa:main(_er) 
+      printf("=========== Load time: %.3fs ============",os.clock()-t0)
+    end,1)
   end
   _er.definePropClass = ER.definePropClass
   function _er.speed(time) return ER.speedTime(time,_er.start) end

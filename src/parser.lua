@@ -813,11 +813,12 @@ function specOp.t_lcur(t,vals,ops,tkns)
   local isExpr = inExpr
   local tab = tablevalue(tkns)
   if tkns.matchpt('t_ddot') then
+    local nt = tkns.peek()
     local n = tkns.matcht('t_name',"Expected property name after :").value
     if tkns.peek().type=='t_ddot' then
       vals.push(prefixexpr(tkns,{type='getprop',obj=tab,prop=n,_dbg=t.dbg})) -- property access
     else
-      vals.push({type='getprop',obj=tab,prop=n,expr=isExpr,_dbg=n.dbg})
+      vals.push({type='getprop',obj=tab,prop=n,expr=isExpr,_dbg=nt.dbg})
     end
   else
     vals.push(tab)

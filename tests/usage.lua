@@ -1,6 +1,7 @@
 --%%name:ER6
 --%% offline:true
 --%%headers:src/include.txt
+--%%file:src/addons.lua,addon
 
 function QuickApp:main(er)
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
@@ -51,7 +52,7 @@ function QuickApp:main(er)
   rule("log('Weather condition is %s',weather:condition)")
   rule("log('Temperature is %s°',weather:temp)")
   rule("log('Wind is %sms',weather:wind)")
-  
+
   rule("dialWheel:value => log('Dial:%s',dialWheel:value)")
   rule("dialBtn:key => log('Dial button %s',dialBtn:key)")
 end
