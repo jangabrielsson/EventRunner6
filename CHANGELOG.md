@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.20] - 2025-09-03
+
+## Changes in v0.0.20
+
+- ✨ **Feature**: Add addon support and refactor builtins and rules
+  - Refactored `builtins.lua` to remove redundant uptime and weather property definitions, now handled by `addons`.
+  - Updated `parser.lua` to improve property access handling.
+  - Modified `rule.lua` to load rules asynchronously, enhancing startup performance.
+- ✨ **Feature**: add add-on documentation for EventRunner 6
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.19] - 2025-09-02
 
 ## Changes in v0.0.19
