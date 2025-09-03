@@ -17,7 +17,8 @@ Additional functions and utilities to extend EventRunner 6 functionality.
     - [Advanced Weather Object](#advanced-weather-object)
   - [Notification Helpers](#notification-helpers)
   - [HTTP \& Network](#http--network)
-    - [HTTP Client with Retry](#http-client-with-retry)
+    - [Synchronous HTTP calls](#synchronous-http-calls)
+    - [Synchronous HC3 HTTP calls](#synchronous-hc3-http-calls)
   - [Debugging \& Logging](#debugging--logging)
   - [Module System](#module-system)
     - [Enhanced Module System](#enhanced-module-system)
@@ -165,33 +166,87 @@ er.variables.weather = Weather()
 
 ## HTTP & Network
 
-### HTTP Client with Retry
+### Synchronous HTTP calls
 ```lua
--- HTTP client with automatic retry logic
-function er.httpRequest(url, options, maxRetries)
-  maxRetries = maxRetries or 3
-  options = options or {}
-  
-  local function attempt(retryCount)
-    net.HTTPClient():request(url, {
-      options = options,
-      success = function(response)
-        if options.success then options.success(response) end
-      end,
-      error = function(error)
-        if retryCount < maxRetries then
-          er.debug("HTTP request failed, retrying... (" .. retryCount .. "/" .. maxRetries .. ")")
-          setTimeout(function() attempt(retryCount + 1) end, 1000 * retryCount)
-        else
-          er.error("HTTP request failed after " .. maxRetries .. " attempts: " .. tostring(error))
-          if options.error then options.error(error) end
+
+  local function httpCall(cb,url,options,data,dflt)
+        local opts = table.copy(options)
+        opts.headers = opts.headers or {}
+        if opts.type then
+            opts.headers["content-type"]=opts.type
+            opts.type=nil
         end
-      end
-    })
-  end
-  
-  attempt(1)
+        if not opts.headers["content-type"] then
+            opts.headers["content-type"] = 'application/json'
+        end
+        if opts.user and opts.pwd then 
+            opts.headers['Authorization']= "Basic "..er.base64encode((opts.user or "")..":"..(opts.pwd or ""))
+            opts.user,opts.pwd=nil,nil
+        end
+        opts.data = data and json.encode(data)
+        --opts.checkCertificate = false
+        local basket = {}
+        net.HTTPClient():request(url,{
+            options=opts,
+            success = function(res0)
+                pcall(function()
+                    res0.data = json.decode(res0.data)  
+                end)
+                cb(res0.data or dflt,res0.status)
+            end,
+            error = function(err) cb(dflt,err) end
+        })
+        return tonumber(opts.timeout) and opts.timeout*1000 or 30*1000
+    end
+    
+    local http = {
+        get = er.createAsyncFun(function(cb,url,options,dflt) options=options or {}; options.method="GET" return httpCall(cb,url,options,dflt) end),
+        put = er.createAsyncFun(function(cb,url,options,data,dflt) options=options or {}; options.method="PUT" return httpCall(cb,url,options,data,dflt) end),
+        post = er.createAsyncFun(function(cb,url,options,data,dflt) options=options or {}; options.method="POST" return httpCall(cb,url,options,data,dflt) end),
+        delete = er.createAsyncFun(function(cb,url,options,dflt) options=options or {}; options.method="DELETE" return httpCall(cb,url,options,dflt) end),
+    }
+    
+    var.http = http
+
+    -- Usage: rule("res = http.get('http://google.com')")
 end
+```
+
+### Synchronous HC3 HTTP calls
+
+```lua
+    
+    local function hc3api(cb,method,api,data)
+        local creds = er.variables._creds
+        if not creds then setTimeout(function() cb(nil,404) end,0) end
+        net.HTTPClient():request("http://localhost/api"..api,{
+            options = {
+                method = method or "GET",
+                headers = {
+                    ['Accept'] = 'application/json',
+                    ["Authorization"] = creds,
+                    ['X-Fibaro-Version'] = '2',
+                   -- ["Content-Type"] = "application/json",
+                },
+                data = data and json.encode(data) or nil
+            },
+            success = function(resp)
+                cb(json.decode(resp.data),200)
+            end,
+            error = function(err)
+                cb(nil,err)
+            end
+        })
+    end
+
+    local api2 = {
+        get = er.createAsyncFun(function(cb,path) return hc3api(cb,"GET",path,nil) end),
+        put = er.createAsyncFun(function(cb,path,data) return hc3api(cb,"PUT",path,data) end),
+        post = er.createAsyncFun(function(cb,path,data) return hc3api(cb,"POST",path,data) end),
+        delete = er.createAsyncFun(function(cb,path) return hc3api(cb,"DELETE",path,nil) end),
+    }
+    var.hc3api = api2
+    var._hc3api = hc3api
 ```
 
 ## Debugging & Logging

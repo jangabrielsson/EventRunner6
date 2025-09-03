@@ -24,7 +24,7 @@ local function loadFuns(er)
   var.weather = Weather()
   
   -- Sync http call
---[[
+
   local function httpCall(cb,url,options,data,dflt)
         local opts = table.copy(options)
         opts.headers = opts.headers or {}
@@ -36,7 +36,7 @@ local function loadFuns(er)
             opts.headers["content-type"] = 'application/json'
         end
         if opts.user and opts.pwd then 
-            opts.headers['Authorization']= fibaro.utils.basicAuthorization((opts.user or ""),(opts.pwd or ""))
+            opts.headers['Authorization']= "Basic "..er.base64encode((opts.user or "")..":"..(opts.pwd or ""))
             opts.user,opts.pwd=nil,nil
         end
         opts.data = data and json.encode(data)
@@ -52,20 +52,20 @@ local function loadFuns(er)
             end,
             error = function(err) cb(dflt,err) end
         })
-        return opts.timeout and opts.timeout//1000 or 30*1000,"HTTP"
+        return tonumber(opts.timeout) and opts.timeout*1000 or 30*1000
     end
     
     local http = {
-        get = ER.asyncFun(function(cb,url,options,dflt) options=options or {}; options.method="GET" return httpCall(cb,url,options,dflt) end),
-        put = ER.asyncFun(function(cb,url,options,data,dflt) options=options or {}; options.method="PUT" return httpCall(cb,url,options,data,dflt) end),
-        post = ER.asyncFun(function(cb,url,options,data,dflt) options=options or {}; options.method="POST" return httpCall(cb,url,options,data,dflt) end),
-        delete = ER.asyncFun(function(cb,url,options,dflt) options=options or {}; options.method="DELETE" return httpCall(cb,url,options,dflt) end),
+        get = er.createAsyncFun(function(cb,url,options,dflt) options=options or {}; options.method="GET" return httpCall(cb,url,options,dflt) end),
+        put = er.createAsyncFun(function(cb,url,options,data,dflt) options=options or {}; options.method="PUT" return httpCall(cb,url,options,data,dflt) end),
+        post = er.createAsyncFun(function(cb,url,options,data,dflt) options=options or {}; options.method="POST" return httpCall(cb,url,options,data,dflt) end),
+        delete = er.createAsyncFun(function(cb,url,options,dflt) options=options or {}; options.method="DELETE" return httpCall(cb,url,options,dflt) end),
     }
     
     var.http = http
     
     local function hc3api(cb,method,api,data)
-        local creds = defVars._creds
+        local creds = er.variables._creds
         if not creds then setTimeout(function() cb(nil,404) end,0) end
         net.HTTPClient():request("http://localhost/api"..api,{
             options = {
@@ -88,14 +88,14 @@ local function loadFuns(er)
     end
 
     local api2 = {
-        get = ER.asyncFun(function(cb,path) return hc3api(cb,"GET",path,nil) end),
-        put = ER.asyncFun(function(cb,path,data) return hc3api(cb,"PUT",path,data) end),
-        post = ER.asyncFun(function(cb,path,data) return hc3api(cb,"POST",path,data) end),
-        delete = ER.asyncFun(function(cb,path) return hc3api(cb,"DELETE",path,nil) end),
+        get = er.createAsyncFun(function(cb,path) return hc3api(cb,"GET",path,nil) end),
+        put = er.createAsyncFun(function(cb,path,data) return hc3api(cb,"PUT",path,data) end),
+        post = er.createAsyncFun(function(cb,path,data) return hc3api(cb,"POST",path,data) end),
+        delete = er.createAsyncFun(function(cb,path) return hc3api(cb,"DELETE",path,nil) end),
     }
     var.hc3api = api2
     var._hc3api = hc3api
---]]
+
 end
 
 setTimeout(function() loadFuns(fibaro.EventRunner._er) end,0)

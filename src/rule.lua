@@ -449,7 +449,6 @@ function createER(qa)
     __index = function(t,k) return  _er.variables[k] end,
     __newindex = function(t,k,v) ER.triggerVars[k]=true _er.variables[k] = v end
   })
-
   function _er.rule(str,opts) 
     opts = opts or _er.opts or {} 
     opts.env = opts.env or RuleEnv
@@ -472,6 +471,8 @@ function createER(qa)
   function _er.cancel(ref) return sourceTrigger:cancel(ref) end
   function _er.postRemote(id,event) sourceTrigger:postRemote(id,event) end
   _er.loadSimDevice = ER.loadSimDev
+  _er.createAsyncFun = ER.ASYNCFUN
+  _er.base64encode = ER.base64encode
   _er.eval = _er.rule -- alias
   setmetatable(_er,{
     __tostring = function() return fmt("EventRunner6 v%s",VERSION) end,
