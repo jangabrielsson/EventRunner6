@@ -41,11 +41,12 @@ end
 
 setTimeout(function() fibaro.loadLibrary(loadLibrary) end,0)
 ```
+The setTimeout(...,0) means that the function will run after the EventRunner engine (er) is created, but before the engine class QuickApp:main(er).
 
 Alternatively, declare a global lua function and load the library manually from 'main'
 
 ```lua
-function loadLibrary(er)
+function loadLibrary(er) -- Must be global lua function
    -- Your add-on functions defined here
 end
 ```

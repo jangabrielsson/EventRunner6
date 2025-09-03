@@ -114,11 +114,6 @@ function QuickApp:main(er)
 -- ]])
 
   -- rule("@foo => = fooo")
-
-  rule([[#foo => case
-   || true >> print(9)
-   || false >> print(7) end
-]])
 end
 
 function QuickApp:onInit()

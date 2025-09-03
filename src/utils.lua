@@ -406,6 +406,7 @@ local function createEventEngine()
   local toHash,fromHash={},{}
   fromHash['device'] = function(e) return {"device"..e.id..e.property,"device"..e.id,"device"..e.property,"device"} end
   fromHash['global-variable'] = function(e) return {'global-variable'..e.name,'global-variable'} end
+  fromHash['trigger-variable'] = function(e) return {'trigger-variable'..e.name,'trigger-variable'} end
   fromHash['quickvar'] = function(e) return {"quickvar"..e.id..e.name,"quickvar"..e.id,"quickvar"..e.name,"quickvar"} end
   fromHash['profile'] = function(e) return {'profile'..e.property,'profile'} end
   fromHash['weather'] = function(e) return {'weather'..e.property,'weather'} end
@@ -417,6 +418,7 @@ local function createEventEngine()
 
   toHash['device'] = function(e) return "device"..(e.id or "")..(e.property or "") end
   toHash['global-variable'] = function(e) return 'global-variable'..(e.name or "") end
+  toHash['trigger-variable'] = function(e) return 'trigger-variable'..(e.name or "") end
   toHash['quickvar'] = function(e) return 'quickvar'..(e.id or "")..(e.name or "") end
   toHash['profile'] = function(e) return 'profile'..(e.property or "") end
   toHash['weather'] = function(e) return 'weather'..(e.property or "") end
