@@ -14,10 +14,11 @@ local catch = math.huge
 local idFun = function() end
 ER.rules = Rules
 
+local function safeFmt(fm,...) if #{...}==0 then return fm else return fmt(fm,...) end end
 local function Event(ev) return setmetatable(ev, ER.EventMT) end
-local function INFO(...) fibaro.debug(__TAG,fmt(...)) end
-local function ERROR(...) fibaro.error(__TAG,fmt(...)) end
-local function WARNING(...) fibaro.warning(__TAG,fmt(...)) end
+local function INFO(...) fibaro.debug(__TAG,safeFmt(...)) end
+local function ERROR(...) fibaro.error(__TAG,safeFmt(...)) end
+local function WARNING(...) fibaro.warning(__TAG,safeFmt(...)) end
 
 local emoji = {
   high_voltage = "⚡",
@@ -485,4 +486,4 @@ setmetatable(ER,{
   __call = function(_,qa) return createER(qa) end
 })
 
-function fibaro.loadLibrary(lf) setTimeout(function() lf(fibaro.EventRunner._er) end,0) end
+function fibaro.loadLibrary(lf) lf(fibaro.EventRunner._er) end 

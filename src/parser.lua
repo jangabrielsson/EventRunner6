@@ -397,13 +397,13 @@ end
 local scope = Scope()
 local inExpr = false 
 
-local blockEnd = mapT{'t_return','t_eof'}
+local blockEnd = mapT{'t_return','t_eof','t_ruleend'}
 function block(tkns,ends) -- OK
   scope.push()
   local stats,ends = {},ends or blockEnd
   local t = tkns.peek()
   while not (ends[t.type] or t.type=='t_return') do
-    local s = stat(tkns)
+    local s = stat(tkns,ends)
     if s then stats[#stats+1] = s end
     t = tkns.peek()
   end
@@ -420,20 +420,21 @@ end
 local varTypes={[""]='ev',["$"]='gv',["$$"]='qv',["$$$"]='sv'}
 local function varType(name) return varTypes[name:match("^[%$]*")] end
 
-local doEnd = mapT{'t_end','t_eof'}
-local whileEnd = mapT{'t_do','t_eof'}
-local untilEnd = mapT{'t_until','t_eof'}
-local exprEnd = mapT{'t_semi','t_comma','t_eof','t_if','t_do','t_while','t_repeat','t_return','t_break'}
-local thenEnd = mapT{'t_end','t_else','t_elseif','t_eof'}
-local endEnd = mapT{'t_end','t_eof'}
-local braEnd = merge(mapT{'t_rbra','t_eof'},exprEnd)
+local doEnd = mapT{'t_end','t_eof','t_ruleend'}
+local whileEnd = mapT{'t_do','t_eof','t_ruleend'}
+local untilEnd = mapT{'t_until','t_eof','t_ruleend'}
+local exprEnd = mapT{'t_semi','t_comma','t_eof','t_if','t_do','t_while','t_repeat','t_return','t_break','t_ruleend'}
+local thenEnd = mapT{'t_end','t_else','t_elseif','t_eof','t_ruleend'}
+local endEnd = mapT{'t_end','t_eof','t_ruleend'}
+local braEnd = merge(mapT{'t_rbra','t_eof','t_ruleend'},exprEnd)
 local incsMap = mapT{'t_addinc','t_subinc','t_mulinc','t_divinc'}
 local caseExpr = mapT{'t_>>'}
-local caseEnd = mapT{'t_end','t_||'}
+local caseEnd = mapT{'t_end','t_||','t_eof','t_ruleend'}
 
-function stat(tkns)
+function stat(tkns,ends)
+  ends = ends or {}
   local pt = tkns.peek().type
-  if tkns.matchpt('t_semi') then return end
+  if tkns.matchpt('t_semi') or ends[pt] then return end
   local stp = tkns.peek()
   if tkns.peek().type == 't_name' then 
     local stp = tkns.peek()
