@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.26] - 2025-09-04
+
+## Changes in v0.0.26
+
+- ✨ **Feature**: update home automation recipes and scheduling rules
+- 🐛 **Fix**: bug in scheduling of between test fixed
+- 📚 **Docs**: add release notes for v0.0.25
+- ♻️ **Refactor**: improve rule handling logic in event processing
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.25] - 2025-09-04
 
 ## Changes in v0.0.25
