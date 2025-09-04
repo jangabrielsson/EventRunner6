@@ -591,7 +591,7 @@ local function RULECHECK(rule) return
       for k,v in pairs(env.locals) do env:pushVariable(k,v) end
     end
     rule(function(...)
-      if env.check then env.check(env.rule,...) end
+      if env.check then env.check(env.rule,env,...) end
       cont(...)
     end,env) 
   end,{'rulecheck',rule}) 

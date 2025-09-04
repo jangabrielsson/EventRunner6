@@ -20,20 +20,24 @@ local function INFO(...) fibaro.debug(__TAG,safeFmt(...)) end
 local function ERROR(...) fibaro.error(__TAG,safeFmt(...)) end
 local function WARNING(...) fibaro.warning(__TAG,safeFmt(...)) end
 
-local emoji = {
-  high_voltage = "⚡",
-  clock = "🕒",
-  check = "✅",
-  clip_board = "📋",
-  clapper_board = "🎬",
-  start_flag = "🚦",
-  stop_flag = "🛑",
-  red_cross = "❌",
-  checkered_flag = "🏁",
-  no_entry = "⛔",
-  thumbs_up = "👍",
-  thumbs_down = "👎"
+local dfltPrefix = {
+  ruleDefPrefix = "✅",
+  triggerListPrefix = "⚡",
+  dailyListPrefix = "🕒",
+  startPrefix = "🎬", 
+  stopPrefix = "🛑",
+  successPrefix = "👍", -- 😀
+  failPrefix = "👎", -- 🙁
+  resultPrefix = "📋", 
+  errorPrefix = "❌",
+  waitPrefix = "💤", -- 😴
+  waitedPrefix = "⏰", -- 🤗
 }
+
+local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
+local function timeStr(t) 
+  if t < T2020 then return fmt("%02d:%02d:%02d",t//3600,t%3600//60,t%60) else return os.date("%Y-%m-%d %H:%M:%S",t) end
+end
 
 local function mkEvent(ev) return setmetatable(ev, ER.EventMT) end
 
@@ -41,18 +45,25 @@ local RuleMT = {
   __tostring = function(r) return fmt("[Rule:%d]", r.id) end,
 }
 
-local function started_rule(self, event) 
+local function started_rule(rule, env, event) 
   local str = tostring(event) 
-  INFO("🎬 %s: %s", self, str) 
+  INFO("%s %s: %s", rule.startPrefix, rule, str) 
 end
-local function check_rule(rule, arg, ...) 
+local function check_rule(rule, env, arg, ...) 
   local str = tostring(rule)
-  if arg then INFO("👍 %s", str) else INFO("👎 %s", str) end
+  if arg then INFO("%s %s", rule.successPrefix, str) else INFO("%s %s", rule.failPrefix, str) end
 end
 local function result_rule(rule, ...) 
   local res = {ER.args2str(...)}
   local rstr = #res>0 and table.concat(res,", ") or "<nil>"
-  INFO("📋 %s: %s", rule, rstr) 
+  INFO("%s %s: %s", rule.resultPrefix, rule, rstr)
+end
+local function waiting_rule(rule, env, time)
+  if time < T2020 then time= time + ER.now() end
+  INFO("%s %s: ⏰%s", rule.waitPrefix, rule, timeStr(time))
+end
+local function waited_rule(rule, ...)
+  INFO("%s %s: awake", rule.waitedPrefix, rule)
 end
 
 local function flatten(t)
@@ -90,9 +101,12 @@ local function createRule(expr, data, opts)
   opts = table.copyShallow(opts)
   opts.env = RuleEnv
 
+  for k,v in pairs(dfltPrefix) do if opts[k] == nil then self[k] = v else self[k] = opts[k] end end
   if opts.started and type(opts.started) == 'boolean' then opts.started = started_rule end
   if opts.check and type(opts.check) == 'boolean' then opts.check = check_rule end
   if opts.result and type(opts.result) == 'boolean' then opts.result = result_rule end
+  if opts.waiting and type(opts.waiting) == 'boolean' then opts.waiting = waiting_rule end
+  if opts.waited and type(opts.waited) == 'boolean' then opts.waited = waited_rule end
 
   local function rsetTimeout(f,t)
     local ref
@@ -109,11 +123,6 @@ local function createRule(expr, data, opts)
   local function rpost(event,time) local ref = sourceTrigger:post(event,time,nil,hook) timers[ref] = true; return ref end
   opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
 
-  local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
-  local function timeStr(t) 
-    if t < T2020 then return fmt("%02d:%02d:%02d",t//3600,t%3600//60,t%60) else return os.date("%Y-%m-%d %H:%M:%S",t) end
-  end
-
   opts.cont = function(...) if opts.result then opts.result(self,...) end end
   opts.err = opts.err or function(str) 
     local msg = fmt("%s: %s (disabling)", self, str) 
@@ -123,6 +132,8 @@ local function createRule(expr, data, opts)
   end
   self.env = ER.createEnv(opts.cont,opts.err,opts)
   self.env.check = opts.check
+  self.env.waiting = opts.waiting
+  self.env.waited = opts.waited
   self.env.rule = self
 
   local dailyEvent = mkEvent({ type = 'Daily', id = self.id })
@@ -228,11 +239,11 @@ local function createRule(expr, data, opts)
 
   function self:start(event,id,matchvars)
     if self.disabled then return end
-    if opts.started then opts.started(self,event) end
     local env = table.copyShallow(self.env)
     env.trigger = event or {type='_startRule'}
     env.eventId = id
     env.locals = {env = {event = event, p = matchvars}}
+    if opts.started then opts.started(self,event,env) end
     expr(opts.cont,env)
     if event and event._df then self:setupDaily(false) end
   end
@@ -272,7 +283,7 @@ local function defRule(expr, opts)
   rule._rule:setupDaily(true)
   rule._rule:setupInterval()
   Rules[#Rules+1] = rule._rule
-  printf("✅ %s",rule._rule.short)
+  printf("%s %s",rule._rule.ruleDefPrefix,rule._rule.short)
   return rule
 end
 
@@ -450,8 +461,9 @@ function createER(qa)
     __index = function(t,k) return  _er.variables[k] end,
     __newindex = function(t,k,v) ER.triggerVars[k]=true _er.variables[k] = v end
   })
-  function _er.rule(str,opts) 
-    opts = opts or _er.opts or {} 
+  function _er.rule(str,opts)
+    opts = opts or {}
+    for k,v in pairs(_er.opts or {}) do if opts[k] == nil then opts[k] = v end end 
     opts.env = opts.env or RuleEnv
     return ER.eval(str,opts)() 
   end

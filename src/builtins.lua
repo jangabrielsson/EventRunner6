@@ -135,7 +135,12 @@ function ER.customDefs(er)
   end
   
   function var.async.wait(cb,time)
-    cb.env:setTimeout(function() cb(true) end, time*1000)
+    if cb.env.waiting then cb.env.waiting(cb.env.rule,cb.env,time) end
+    cb.env:setTimeout(function() 
+      if cb.env.waited then cb.env.waited(cb.env.rule,cb.env,time) end
+      cb(true) 
+    end, 
+    time*1000)
     return -1 -- not async
   end
 
