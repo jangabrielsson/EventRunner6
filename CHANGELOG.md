@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.23] - 2025-09-04
+
+## Changes in v0.0.23
+
+- ✨ **Feature**: improve rule logging options and formats for rule events
+- ✨ **Feature**: add trigger-variable support in event engine
+- ♻️ **Refactor**: update loadLibrary function scope in documentation
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.22] - 2025-09-03
 
 ## Changes in v0.0.22
