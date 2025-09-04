@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.24] - 2025-09-04
+
+## Changes in v0.0.24
+
+- ✨ **Feature**: add release notes for v0.0.23
+- ♻️ **Refactor**: update event handling in rule creation
+- ♻️ **Refactor**: modify test rule parameters for clarity
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.23] - 2025-09-04
 
 ## Changes in v0.0.23
