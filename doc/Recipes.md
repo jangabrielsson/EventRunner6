@@ -9,7 +9,8 @@
     - [Turn on lights when motion is detected and fibaro global variable 'Vacation' is not true](#turn-on-lights-when-motion-is-detected-and-fibaro-global-variable-vacation-is-not-true)
     - [Turn on lights when scene activation event from switch](#turn-on-lights-when-scene-activation-event-from-switch)
     - [Turn on lights when key 2 is pressed on remote control](#turn-on-lights-when-key-2-is-pressed-on-remote-control)
-  - [Light scheduling](#light-scheduling)
+  - [Scheduling](#scheduling)
+    - [Set a global variable with day state](#set-a-global-variable-with-day-state)
     - [Turn off all lights at midnight](#turn-off-all-lights-at-midnight)
     - [Turn off all lights at 11 on weekdays and midnight on weekends](#turn-off-all-lights-at-11-on-weekdays-and-midnight-on-weekends)
   - [Security routines](#security-routines)
@@ -61,8 +62,23 @@ rule([[remote:central.keyId == 2 =>
 ```
 
 
-## Light scheduling
+## Scheduling
 
+### Set a global variable with day state
+
+```lua
+rule("07:00..07:30 => $HomeState='WakeUp'").start()
+rule("07:30..11:00 => $HomeState='Morning'").start()
+rule("11:00..13:00 => $HomeState='Lunch'").start()
+rule("13:00..18:30 => $HomeState='Afternoon'").start()
+rule("18:30..20:00 => $HomeState='Dinner'").start()
+rule("20:00..23:00 => $HomeState='Evening'").start()
+rule("23:00..07:00 => $HomeState='Night'").start()
+
+rule("@dawn+00:15 => $isDark=false")
+rule("@dusk-00:15 => $isDark=true")
+```
+The 07:00..07:30 rule will trigger at 07:00 and 07:00:01 and check the condition. If the current time is between (inclusive) 07:00..07:30 we will set the global variable 'HomeState' to 'Wakeup'. The .start() added to the rule makes it run at startup, setting the variable correctly if it's between the times specified. Why the rule triggers on 07:00:01 is a technicality, needed if we negate the test, and usually nothing to be concerned of as it normally will be false anyway.
 ### Turn off all lights at midnight
 
 ```lua
@@ -79,6 +95,7 @@ rule([[11:00 & wday('mon-thu') =>
   allLights:off;
   log('All lights turned off at 11:00')
 ]])
+
 rule([[@00:00 & wday('fri-sun') =>
   allLights:off;
   log('All lights turned off at midnight')

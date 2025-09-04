@@ -122,12 +122,19 @@ function QuickApp:main(er)
   -- rule("#foo => wait(10); return 77",{triggers=true,started=false,check=check})
   -- rule("post(#foo)",{nolog=true})
 
-  rule("@sunset => foo(); 77:isOn & 99:on ; bar()")
+rule("07:00..07:30 => log('WakeUp')").start()
+rule("07:30..11:00 => log('Morning')").start()
+rule("11:00..13:00 => log('Lunch')").start()
+rule("13:00..18:30 => log('Afternoon')").start()
+rule("18:30..20:00 => log('Dinner')").start()
+rule("20:00..23:00 => log('Evening')").start()
+rule("23:00..07:00 => log('Night')").start()
+rule("@sunset => log('Sunset')")
 end
 
 function QuickApp:onInit()
   local er = fibaro.EventRunner(self)
   self:debug(er)
-  --er.speed(4*24)
-  er.start()
+  er.speed(4*24)
+  --er.start()
 end

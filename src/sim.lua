@@ -117,6 +117,7 @@ function speed.loop()
     if not t then break end
     local offs = t.time - _time()
     setTimeOffset(offs)
+    --print(os.date("%Y-%m-%d %H:%M:%S",speed.userTime())," Timer:",t.id)
     t.fun()
   end
 end
