@@ -94,6 +94,8 @@ ER.perror = perror
 local function stream(tab,src)
   local p,self=0,{ stream=tab, eof={type='t_eof', value='', dbg={from=tab[#tab].dbg.from, to=tab[#tab].dbg.to}} }
   self.src = src
+  function self.getP() return p end
+  function self.setP(np) p=np end
   function self.next() p=p+1 local r = p<=#tab and tab[p] or self.eof; return r end
   function self.last() return tab[p] or self.eof end
   function self.prev() return tab[p-1] or self.eof end
@@ -403,9 +405,19 @@ function block(tkns,ends) -- OK
   local stats,ends = {},ends or blockEnd
   local t = tkns.peek()
   while not (ends[t.type] or t.type=='t_return') do
-    local s = stat(tkns,ends)
-    if s then stats[#stats+1] = s end
-    t = tkns.peek()
+    local saveP = tkns.getP()
+    local stat,err = pcall(function()
+      local s = stat(tkns,ends)
+      if s then stats[#stats+1] = s end
+      t = tkns.peek()
+    end)
+    if not stat then -- We got an error
+      tkns.setP(saveP)
+      local ep = tkns.peek()
+      local stat2,err2 = pcall(expr,tkns,ends) -- Try to parse expression
+      if stat2 then perror("Unexpected statement but got expression",ep) -- If so, give better error
+      else error(err) end -- No an expression either, just error
+    end
   end
   if tkns.peek().type == 't_return' then
     local r = retstat(tkns,ends)
@@ -599,7 +611,8 @@ if tkns.peek().type=='num' then
   end
   return {type='getprop',prop=n,obj=num,_dbg=pt.dbg}
 end
-perror(fmt("unexpected token %s",tkns.peek().type),tkns.peek())
+local tp = tkns.peek()
+perror(fmt("unexpected token '%s'",tp.opval or tp.value or tp.type),tkns.peek())
 end
 
 function namelist(tkns)

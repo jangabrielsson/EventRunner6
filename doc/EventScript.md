@@ -863,6 +863,88 @@ r.start() -- trigger the rule manually
 r.info() -- logs info about the rule
 ```
 
+​
+A rule has a life-cycle, or states, that it passes through.
+1. Defined, when a rule is defined/created.
+2. When a rule is started/triggered
+3. If the trigger expression (condition) of the rule succeeded or failed, if succeeded the action will run
+4. Optionally, the rule can wait, be suspended, and later woken up. Typically with the wait(time) command.
+5. The action of the rule can produce a result
+  
+When a rule is defined and triggered there are logs created in the console for the above states. We can tailor them to our own look&feel.
+```lua
+er.opts = {
+    started = boolean/function, -- true => system start log, alt. user function(rule,env,trigger)
+    check = boolean/function,   -- true => system check log, alt. user function(rule,env,cond result)
+    result = boolean/function,  -- true => system result log, alt. user function(rule,result)
+    triggers = boolean,         -- list triggers when rule defined
+    waiting = boolean/function, -- true => system waiting log, alt. user function(rule,env,time)
+    waited = boolean/function,  -- true => system waited log, alt. user function(rule,env,time)
+    ruleDefPrefix = "✅",       -- prefix string for rule defined result
+    triggerListPrefix = "⚡",    -- prefix string for listed rule triggers
+    dailyListPrefix = "🕒",     -- prefix string for listed rule dailys
+    startPrefix = "🎬",         -- prefix string for rule started/triggered
+    successPrefix = "👍",       -- prefix string for rule check/success
+    failPrefix = "👎",          -- prefix string for rule check/fail
+    resultPrefix = "📋",        -- prefix string for rule result
+    errorPrefix = "❌",         -- prefix string for rule compile error
+    waitPrefix = "💤",          -- prefix string for rule waiting/sleep notification
+    waitedPrefix = "⏰",        -- prefix string for rule waited/awake notification
+} 
+```
+The prefix strings shown are the defaults, and boolean/functions are set to false as default.
+
+If we turn on all flags we get
+```lua
+  rule("#foo => wait(10); return 77")
+  rule("post(#foo)")
+```
+```bash
+[04.09.2025][08:12:58][DEBUG  ][ER65555]: Rule 1 triggers: -- Listing trigger, opts.triggers = true
+[04.09.2025][08:12:58][DEBUG  ][ER65555]: ⚡ #foo{}         -- Event trigger, opts.triggerListPrefix = "⚡"
+[04.09.2025][08:12:58][DEBUG  ][ER65555]: ✅ [Rule:1] #foo => wait(10); return 77 -- opts.ruleDefPrefix = "✅"
+[04.09.2025][08:12:58][DEBUG  ][ER65555]: =========== Load time: 0.010s ============
+[04.09.2025][08:12:59][DEBUG  ][ER65555]: 🎬 [Rule:1]: #foo{}  -- opts.started = true, opts.startPrefix = "🎬"
+[04.09.2025][08:12:59][DEBUG  ][ER65555]: 👍 [Rule:1]          -- opts.check = true, opts.successPrefix = "👍"
+[04.09.2025][08:12:59][DEBUG  ][ER65555]: 💤 [Rule:1]: ⏰08:13:09 -- opts.waiting = true, opts.waitPrefix = "💤"
+[04.09.2025][08:13:09][DEBUG  ][ER65555]: ⏰ [Rule:1]: awake      -- opts.waited = true, opts.waitedPrefix = "⏰"
+[04.09.2025][08:13:09][DEBUG  ][ER65555]: 📋 [Rule:1]: 77         -- opts.result = true, opts.resultPrefix = "📋"
+```
+  
+To get a reasonable log we start in main by setting some of the flags.
+```lua
+er.opts = { started = true, check = true, triggers = true }
+```
+Then we get the triggers listed for a defined rule - always good to see if it will react to the events we had in mind.
+We get a log when the rule is started and it show the event that triggered the rule
+We get a log with thumbs up/down depending how the rule condition went.
+  
+er.pts are defined globally and are applied to all defined rules. We can override opts by giving an opts argument to rule(str,opts)
+
+The options for the rule will be the global er.opts override with the opts we give for the rule.
+```lua
+rule("@sunset => lamp:on",{check=false})
+```
+More advanced, we can provide a log function for the rule logs.
+An example. We can ignore the start message, and instead only log if the check/success of the rule is true.
+```lua
+er.opts = { started = true, check = true, result = false, triggers=true, }
+
+local function check(rule, env, res)
+  if res then print(string.format("%s %s",rule.successPrefix,env.trigger)) end
+end
+
+rule("#foo => wait(10); return 77",{triggers=true,started=false,check=check}) -- no start msg, and custom check
+rule("post(#foo)")
+```
+```bash
+[04.09.2025][08:30:42][DEBUG  ][ER65555]: Rule 1 triggers:  -- opts.triggers = true
+[04.09.2025][08:30:42][DEBUG  ][ER65555]: ⚡ #foo{}
+[04.09.2025][08:30:42][DEBUG  ][ER65555]: ✅ [Rule:1] #foo => return 77
+[04.09.2025][08:30:42][DEBUG  ][ER65555]: =========== Load time: 0.011s ============
+[04.09.2025][08:30:42][DEBUG  ][ER65555]: 👍 #foo{} -- No start message, only our own check with success and trigger
+```
+
 ## Best Practices
 
 1. **Use meaningful device names** in your HomeTable variables

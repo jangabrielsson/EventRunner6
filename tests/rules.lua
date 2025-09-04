@@ -119,9 +119,10 @@ function QuickApp:main(er)
   --   if res then print(string.format("%s %s",rule.successPrefix,env.trigger)) end
   -- end
 
-  rule("#foo => wait(10); return 77",{triggers=true,started=true,waiting=true,waited=true,check=true,result=true})
-  rule("post(#foo)",{nolog=true})
+  -- rule("#foo => wait(10); return 77",{triggers=true,started=false,check=check})
+  -- rule("post(#foo)",{nolog=true})
 
+  rule("@sunset => foo(); 77:isOn & 99:on ; bar()")
 end
 
 function QuickApp:onInit()
