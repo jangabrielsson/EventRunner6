@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.28] - 2025-09-04
+
+## Changes in v0.0.28
+
+- ✨ **Feature**: add Earth Hour functionality to automation recipes rules
+- ♻️ **Refactor**: improve rule handling logic for variable assignments
+- 🐛 **Fix**: correct error message in parser for unexpected statements
+- 🐛 **Fix**: speed time log message
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.27] - 2025-09-04
 
 ## Changes in v0.0.27
