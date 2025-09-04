@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.25] - 2025-09-04
+
+## Changes in v0.0.25
+
+- ✨ **Feature**: enhance logging options for rule events
+- ♻️ **Refactor**: improve error handling in parser
+- 📚 **Docs**: update EventScript documentation with rule lifecycle details
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.24] - 2025-09-04
 
 ## Changes in v0.0.24
