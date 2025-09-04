@@ -243,7 +243,7 @@ local function createRule(expr, data, opts)
     env.trigger = event or {type='_startRule'}
     env.eventId = id
     env.locals = {env = {event = event, p = matchvars}}
-    if opts.started then opts.started(self,event,env) end
+    if opts.started then opts.started(self,env,event) end
     expr(opts.cont,env)
     if event and event._df then self:setupDaily(false) end
   end

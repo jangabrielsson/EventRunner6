@@ -115,11 +115,11 @@ function QuickApp:main(er)
 
   -- rule("@foo => = fooo")
 
-  local function check(rule, env, res)
-    if res then print(string.format("%s %s",rule.successPrefix,env.trigger)) end
-  end
+  -- local function check(rule, env, res)
+  --   if res then print(string.format("%s %s",rule.successPrefix,env.trigger)) end
+  -- end
 
-  rule("#foo => wait(10); return 77",{started=false,waiting=true,check=check,result=true})
+  rule("#foo => wait(10); return 77",{triggers=true,started=true,waiting=true,waited=true,check=true,result=true})
   rule("post(#foo)",{nolog=true})
 
 end
