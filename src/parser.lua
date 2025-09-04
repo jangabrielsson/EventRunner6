@@ -415,7 +415,7 @@ function block(tkns,ends) -- OK
       tkns.setP(saveP)
       local ep = tkns.peek()
       local stat2,err2 = pcall(expr,tkns,ends) -- Try to parse expression
-      if stat2 then perror("Unexpected statement but got expression",ep) -- If so, give better error
+      if stat2 then perror("Expected statement but got expression",ep) -- If so, give better error
       else error(err) end -- No an expression either, just error
     end
   end

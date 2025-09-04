@@ -15,12 +15,12 @@ function ding(id)
   if not next(regs) then printf("%s All tests done!",YES) os.exit() end
 end
 
-local a,b = api.post("/globalVariables/",{name="GV1",value="0"})
+local _,_ = api.post("/globalVariables/",{name="GV1",value="0"})
 
 function QuickApp:main(er)
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
   local function loadDevice(name) return er.loadSimDevice("/Users/jangabrielsson/Documents/dev/plua_new/plua/examples/fibaro/stdQAs/"..name..".lua") end
-  er.opts = { started = true, check = true, result = false, triggers=true, } --nolog=true }
+  er.opts = { started = false, check = false, result = false, triggers=true, } --nolog=true }
   
   function var.click(id,val) 
     api.post("/plugins/publishEvent",{
@@ -122,16 +122,51 @@ function QuickApp:main(er)
   -- rule("#foo => wait(10); return 77",{triggers=true,started=false,check=check})
   -- rule("post(#foo)",{nolog=true})
 
-rule("07:00..07:30 => log('WakeUp')").start()
-rule("07:30..11:00 => log('Morning')").start()
-rule("11:00..13:00 => log('Lunch')").start()
-rule("13:00..18:30 => log('Afternoon')").start()
-rule("18:30..20:00 => log('Dinner')").start()
-rule("20:00..23:00 => log('Evening')").start()
-rule("23:00..07:00 => log('Night')").start()
-rule("@sunset => log('Sunset')")
+  FakeLamp = {}
+  er.definePropClass("FakeLamp") -- Define custom weather object
+  function FakeLamp:__init(id,value) PropObject.__init(self) self.id = id self.value = value end
+  function FakeLamp.getProp.value(prop,env) return prop.value end
+  function FakeLamp.getProp.off(prop,env) print(prop,"turned off") prop.value = 0 return true end
+  function FakeLamp.setProp.value(prop,env,value) print(prop,"value =",value) prop.value =  value end
+  function FakeLamp.trigger.value(prop) return {type='fakeLamp', id=prop.id, property='value'} end
+  function FakeLamp:__tostring() return string.format("FakeLamp(%d)",self.id) end
+
+var.kitchen = { lamp = FakeLamp(89, 77) }
+var.bedroom = { lamp =  FakeLamp(99, 30) }
+
+rule("earthLight = {kitchen.lamp, bedroom.lamp}")
+rule("log('Earth light IDs: %s',json.encodeFast(earthLight))")
+rule("earthLight:on")
+
+rule([[earthDates={
+    2025/03/29/20:30,
+    2026/03/28/20:30,
+    2027/03/27/20:30
+}]])
+
+rule([[for _,t in ipairs(earthDates) do 
+      if t > os.time() then
+        print('Earth hour date:',os.date('%c',t));
+        post(#earthHour,t)
+      end
+    end
+]])
+
+rule([[#earthHour =>
+  local state = {};
+  log('Earth hour started');
+  for _,id in ipairs(earthLight) do state[id] = id:value end;
+  earthLight:off;
+  wait(01:00);
+  log('Earth hour ended');
+  for id,val in pairs(state) do id:value=val end
+]])
+
+
 end
 
+
+--%%time:2026/03/28/ 20:00
 function QuickApp:onInit()
   local er = fibaro.EventRunner(self)
   self:debug(er)

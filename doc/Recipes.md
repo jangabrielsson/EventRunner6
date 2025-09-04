@@ -13,6 +13,7 @@
     - [Set a global variable with day state](#set-a-global-variable-with-day-state)
     - [Turn off all lights at midnight](#turn-off-all-lights-at-midnight)
     - [Turn off all lights at 11 on weekdays and midnight on weekends](#turn-off-all-lights-at-11-on-weekdays-and-midnight-on-weekends)
+    - [Turn off lights on Erath Hour](#turn-off-lights-on-erath-hour)
   - [Security routines](#security-routines)
     - [Arm security system at night](#arm-security-system-at-night)
     - [Disarm security system in the morning](#disarm-security-system-in-the-morning)
@@ -67,18 +68,35 @@ rule([[remote:central.keyId == 2 =>
 ### Set a global variable with day state
 
 ```lua
-rule("07:00..07:30 => $HomeState='WakeUp'").start()
-rule("07:30..11:00 => $HomeState='Morning'").start()
-rule("11:00..13:00 => $HomeState='Lunch'").start()
-rule("13:00..18:30 => $HomeState='Afternoon'").start()
-rule("18:30..20:00 => $HomeState='Dinner'").start()
-rule("20:00..23:00 => $HomeState='Evening'").start()
-rule("23:00..07:00 => $HomeState='Night'").start()
+rule("@00:00 => weekDay = wday('mon-fri')").star()
+rule("@00:00 => weekEnd = wday('sat-sun')").star()
+
+rule("weekDay & 07:00..07:30 => $HomeState='WakeUp'").start()
+rule("weekDay & 07:30..11:00 => $HomeState='Morning'").start()
+rule("weekDay & 11:00..13:00 => $HomeState='Lunch'").start()
+rule("weekDay & 13:00..18:30 => $HomeState='Afternoon')").start()
+rule("weekDay & 18:30..20:00 => $HomeState='Dinner'").start()
+rule("weekDay & 20:00..23:00 => $HomeState='Evening'").start()
+rule("weekDay & 23:00..07:00 => $HomeState='Night'").start()
+
+rule("weekEnd & 08:00..09:00 => $HomeState='WakeUp'").start()
+rule("weekEnd & 09:00..12:00 => $HomeState='Morning'").start()
+rule("weekEnd & 12:00..14:00 => $HomeState='Lunch'").start()
+rule("weekEnd & 14:00..19:00 => $HomeState='Afternoon'").start()
+rule("weekEnd & 19:00..20:00 => $HomeState='Dinner'").start()
+rule("weekEnd & 20:00..24:00 => $HomeState='Evening'").start()
+rule("weekEnd & 24:00..08:00 => $HomeState='Night'").start()
 
 rule("@dawn+00:15 => $isDark=false")
 rule("@dusk-00:15 => $isDark=true")
 ```
 The 07:00..07:30 rule will trigger at 07:00 and 07:00:01 and check the condition. If the current time is between (inclusive) 07:00..07:30 we will set the global variable 'HomeState' to 'Wakeup'. The .start() added to the rule makes it run at startup, setting the variable correctly if it's between the times specified. Why the rule triggers on 07:00:01 is a technicality, needed if we negate the test, and usually nothing to be concerned of as it normally will be false anyway.
+
+WIth these variables a rule to turn on light if dark wakeup could be
+```lua
+rule("$HomeState=='WakeUp' & isDark => bedroomLight:on")
+```
+
 ### Turn off all lights at midnight
 
 ```lua
@@ -99,6 +117,38 @@ rule([[11:00 & wday('mon-thu') =>
 rule([[@00:00 & wday('fri-sun') =>
   allLights:off;
   log('All lights turned off at midnight')
+]])
+```
+
+### Turn off lights on Erath Hour
+
+```lua
+rule("earthLight = {kitchen.lamp, bedroom.lamp}")
+rule("log('Earth light IDs: %s',json.encodeFast(earthLight))")
+rule("earthLight:on")
+
+rule([[earthDates={
+    2025/03/29/20:30,
+    2026/03/28/20:30,
+    2027/03/27/20:30
+}]])
+
+rule([[for _,t in ipairs(earthDates) do 
+      if t > os.time() then
+        print('Earth hour date:',os.date('%c',t));
+        post(#earthHour,t)
+      end
+    end
+]])
+
+rule([[#earthHour =>
+  local state = {};
+  log('Earth hour started');
+  for _,id in ipairs(earthLight) do state[id] = id:value end;
+  earthLight:off;
+  wait(01:00);
+  log('Earth hour ended');
+  for id,val in pairs(state) do id:value=val end
 ]])
 ```
 

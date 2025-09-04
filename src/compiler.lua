@@ -829,10 +829,18 @@ function comp.assign(expr)
     end
     elseif v.type == 'aref' then
       local var = {tab=compa(v.tab), idx=v.idx}
+      if type(var.idx) == 'table' then var.idx = compa(v.idx) end
       vars[#vars+1] = function(env,val,cont,i) --{type='aref',tab=compa(v.tab), idx=v.idx}
         var.tab(function(tab)
-          tab[v.idx] = val
-          cont(i)
+          if isCont(var.idx) then
+            var.idx(function(idx)
+              tab[idx] = val
+              cont(i)
+            end,env)
+          else
+            tab[v.idx] = val
+            cont(i)
+          end
         end,env)
       end
     elseif v.type == 'getprop' then
