@@ -5,8 +5,8 @@ local debugFlags = ER.debugFlags
 local speed = {}
 local timeOffset = os.time() 
 local fibdebug = fibaro.debug
-function speed.debug(...) 
-  fibdebug(os.date("%Y-%m-%d %H:%M:%S",speed.userTime()),...) 
+function speed.debug(tag,...) 
+  fibdebug(tag,os.date("%Y-%m-%d %H:%M:%S",speed.userTime()),...) 
 end
 local _setTimeout,_clearTimeout,_setInterval,_clearInterval = setTimeout,clearTimeout,setInterval,clearInterval
 local _time,_date = os.time,os.date

@@ -162,6 +162,25 @@ rule([[#earthHour =>
   for id,val in pairs(state) do id:value=val end
 ]])
 
+shs = { getanswer = function(cb, query, speaker) 
+  print(cb,query,speaker) 
+  end
+}
+
+var.SWITCH = var.HT.kitchen.light.roof 
+-- rule("AI_speakers = '192.168.1.239'")
+-- rule("log('AI_speakers=%s',AI_speakers)")
+-- rule("SWITCH:isOn => shs.getanswer(callback, query, AI_speakers)")
+-- rule("SWITCH:on")
+  
+  --THIS DOESNT
+-- var.callback = function() end
+-- var.query = "http/.../"
+-- var.shs = { getanswer = function(cb, query, speaker) print(cb,query,speaker) end }
+-- rule("kitchenSpeaker = '192.168.1.239'")
+-- rule("AI_speakers = kitchenSpeaker")
+-- rule("SWITCH:isOn => shs.getanswer(callback, query, AI_speakers)")
+-- rule("SWITCH:on")
 
 end
 
