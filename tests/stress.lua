@@ -9,7 +9,7 @@ function QuickApp:main(er)
 
    rule("a=0")
    local str = "@@00:00:02 => a = a+1"
-   for i=1,300 do rule(str) end
+   for i=1,500 do rule(str) end
    rule("@@00:00:02 => log('%s',a % 100 == 0 & 'OK' | 'BAD')")
 end
 

@@ -47,7 +47,7 @@ rule([[motion:breached & !Vacation =>
 ### Turn on lights when scene activation event from switch
 
 ```lua
-rule([[switch:scene = S1.double => -- double click
+rule([[switch:scene == S1.double => -- double click
   hallwayLight:on;
   log('Double click switch, Hallway light turned on')
 ]])
