@@ -164,7 +164,7 @@ function QuickApp:main(er)
   
   shs = { getanswer = function(cb, query, speaker) print(cb,query,speaker) end }
   
-  var.SWITCH = var.HT.kitchen.light.roof 
+  var.test = {SWITCH = var.HT.kitchen.light.roof }
   -- rule("AI_speakers = '192.168.1.239'")
   -- rule("log('AI_speakers=%s',AI_speakers)")
   -- rule("SWITCH:isOn => shs.getanswer(callback, query, AI_speakers)")
@@ -179,10 +179,16 @@ function QuickApp:main(er)
   -- rule("SWITCH:isOn => shs.getanswer(callback, query, AI_speakers)")
   -- rule("SWITCH:on")
 
-  triggerVar.x5 = false 
-  rule("trueFor(00:00:08, x5) => log('xx is true for 5 sec')")
-  rule("x5 = true; wait(00:00:07); x5 = false")
-  
+  -- triggerVar.x5 = false 
+  -- rule("trueFor(00:00:08, test.SWITCH:isOn) => log('xx is true for 5 sec')")
+  -- rule("test.SWITCH:on; wait(00:00:07); test.SWITCH:off")
+
+
+
+rule("global('Bezetting_Keuken2')")
+
+rule([[return $Bezetting_Keuken == 'Vrij' ]])
+
 end
 
 --%%time:2025/01/01 12:00:00 

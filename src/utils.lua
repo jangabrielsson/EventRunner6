@@ -674,6 +674,7 @@ end
 local _marshalBool={['true']=true,['True']=true,['TRUE']=true,['false']=false,['False']=false,['FALSE']=false}
 
 local function marshallFrom(v) 
+  if v == nil then return nil end
   local fc = v:sub(1,1)
   if fc == '[' or fc == '{' then local s,t = pcall(json.decode,v); if s then return t end end
   if tonumber(v) then return tonumber(v)
