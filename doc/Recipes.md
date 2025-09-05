@@ -12,8 +12,9 @@
   - [Scheduling](#scheduling)
     - [Set a global variable with day state](#set-a-global-variable-with-day-state)
     - [Turn off all lights at midnight](#turn-off-all-lights-at-midnight)
-    - [Turn off all lights at 11 on weekdays and midnight on weekends](#turn-off-all-lights-at-11-on-weekdays-and-midnight-on-weekends)
-    - [Turn off lights on Erath Hour](#turn-off-lights-on-erath-hour)
+    - [Turn off all lights at 23 on weekdays and midnight on weekends](#turn-off-all-lights-at-23-on-weekdays-and-midnight-on-weekends)
+    - [Turn off lights on Earth Hour](#turn-off-lights-on-earth-hour)
+    - [Restart EventRunner at Daylight Time Savings](#restart-eventrunner-at-daylight-time-savings)
   - [Security routines](#security-routines)
     - [Arm security system at night](#arm-security-system-at-night)
     - [Disarm security system in the morning](#disarm-security-system-in-the-morning)
@@ -106,12 +107,12 @@ rule([[@00:00 =>
 ]])
 ```
 
-### Turn off all lights at 11 on weekdays and midnight on weekends
+### Turn off all lights at 23 on weekdays and midnight on weekends
 
 ```lua
-rule([[11:00 & wday('mon-thu') =>
+rule([[23:00 & wday('mon-thu') =>
   allLights:off;
-  log('All lights turned off at 11:00')
+  log('All lights turned off at 23:00')
 ]])
 
 rule([[@00:00 & wday('fri-sun') =>
@@ -120,7 +121,7 @@ rule([[@00:00 & wday('fri-sun') =>
 ]])
 ```
 
-### Turn off lights on Erath Hour
+### Turn off lights on Earth Hour
 
 ```lua
 rule("earthLight = {kitchen.lamp, bedroom.lamp}")
@@ -151,6 +152,19 @@ rule([[#earthHour =>
   for id,val in pairs(state) do id:value=val end
 ]])
 ```
+
+### Restart EventRunner at Daylight Time Savings
+
+```lua
+rule("post(#restart,nextDST())")     -- post event at next daylight savings time
+rule("#restart => plugin.restart()") -- Restart QA when DST hour jumps.
+```
+This because rules like
+```lua
+rule("@15:00 => ...")
+```
+will be off an hour at DST day. The reason is that the time is calculated every midnight, and this is calculated as 15*3600 seconds after midnight. But at DST the real 15:00 jumps an hour forward or backward. It actually goes for all setTimeout set by the system, if the delay is calculated to run on an absolute time.
+So, the simplest approach is to just restart the QA at DST. All rules start up again and all timers are set with the new right time...
 
 ## Security routines
 
