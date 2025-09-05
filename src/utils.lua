@@ -804,6 +804,32 @@ local function base64encode(data)
   end)..({ '', '==', '=' })[#data%3+1])
 end
 
+local oldSetTimeout,oldClearTimeout = setTimeout,clearTimeout
+
+local longRefs,maxt = {},2147483648-1
+function setTimeout(fun,ms,errh)
+  __assert_type(fun,"function") __assert_type(ms,"number")
+  if ms <= maxt then return oldSetTimeout(fun,ms,errh) end
+  local longRef = nil
+  local function lsetTimeout()
+    if ms > maxt then
+      ms = ms-maxt
+      local ref = oldSetTimeout(lsetTimeout,maxt)
+      longRefs[longRef or ref] = ref
+      longRef = ref
+      return ref
+    else
+      if longRef then longRefs[longRef] = nil end
+      return oldSetTimeout(fun,ms,errh)
+    end
+  end
+  return lsetTimeout()
+end
+
+function clearTimeout2(ref)
+  if longRefs[ref] then oldClearTimeout(longRefs[ref]) longRefs[ref]=nil else oldClearTimeout(ref) end
+end
+
 ER.alarmFuns = alarmFuns
 ER.toSeconds = toSeconds
 ER.midnight = midnight

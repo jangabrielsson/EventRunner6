@@ -116,6 +116,7 @@ local function createRule(expr, data, opts)
       return table.unpack(res)
     end
     ref = setTimeout(fun,t)
+    timers[ref] = true
     return ref
   end
   local function rclearTimeout(ref) if timers[ref] then clearTimeout(ref) timers[ref] = nil end end

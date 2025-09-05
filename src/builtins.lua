@@ -159,7 +159,20 @@ function ER.customDefs(er)
   
   var.S1 = {click = "16", double = "14", tripple = "15", hold = "12", release = "13"}
   var.S2 = {click = "26", double = "24", tripple = "25", hold = "22", release = "23"}
-
+  
+  function var.nextDST()
+    local d0 = os.date("*t")
+    local t0 = os.time({year=d0.year, month=d0.month, day=1, hour=0})
+    local h = d0.hour
+    repeat  t0 = t0 + 3600*24*30; d0 = os.date("*t",t0) until d0.hour ~= h
+    t0 = t0 - 3600*24*30; d0 = os.date("*t",t0)
+    repeat h = d0.hour; t0 = t0 + 3600*24; d0 = os.date("*t",t0) until d0.hour ~= h
+    t0 = t0 - 3600*24; d0 = os.date("*t",t0)
+    repeat h = d0.hour; t0 = t0 + 3600; d0 = os.date("*t",t0) until d0.hour ~= (h+1) % 24
+    if d0.month > 7 then t0 = t0 + 3600 end
+    return t0
+  end
+  
   ------- Patch fibaro.call to track manual switches -------------------------
   local lastID,switchMap = {},{}
   local oldFibaroCall = fibaro.call

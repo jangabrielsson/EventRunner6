@@ -122,15 +122,16 @@ function speed.loop()
   end
 end
 
-local id = 10000
-local function createDevice(path)
-  local code = fibaro.plua.lib.readFile(path)
-  local d = fibaro.plua.lib.loadQAString(code,{headers={"desktop:false"}})
-  return d.device.id
+if fibaro.plua then
+  local id = 10000
+  local function createDevice(path)
+    local code = fibaro.plua.lib.readFile(path)
+    local d = fibaro.plua.lib.loadQAString(code,{headers={"desktop:false"}})
+    return d.device.id
+  end
+  ER.loadSimDev = createDevice
 end
-
-ER.loadSimDev = createDevice
-
+  
 function ER.speedTime(speedTime,fun)
   speed.stopTime = os.time() + speedTime*3600
   fibaro.debug = speed.debug
