@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.30] - 2025-09-05
+
+## Changes in v0.0.30
+
+- 🐛 **Fix**: handle nil values in marshallFrom function
+- ♻️ **Refactor**: update variable structure in rules test
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.29] - 2025-09-05
 
 ## Changes in v0.0.29
