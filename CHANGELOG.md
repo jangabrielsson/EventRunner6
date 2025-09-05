@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.29] - 2025-09-05
+
+## Changes in v0.0.29
+
+- ✨ **Feature**: add nextDST function for daylight saving time calculation
+- ♻️ **Refactor**: improve setTimeout handling for long durations
+- 🐛 **Fix**: ensure timers are properly tracked in rule execution
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.28] - 2025-09-04
 
 ## Changes in v0.0.28
