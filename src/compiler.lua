@@ -441,7 +441,13 @@ local function VAR(name,cvar)
   end, {'var', name})
 end
 
-local function GVAR(name) return CONT(function(cont,env) cont(ER.marshallFrom(fibaro.getGlobalVariable(name))) end, {'gvar', name}) end
+local function GVAR(name)
+  return CONT(function(cont,env)
+    local val = fibaro.getGlobalVariable(name)
+    if val == nil then fibaro.warning("Global variable not found: "..tostring(name)) end
+    cont(ER.marshallFrom(val)) 
+  end, {'gvar', name}) 
+end
 local function QVAR(name) return CONT(function(cont,env) cont(quickApp:getVariable(name)) end, {'qvar', name}) end
 local function IVAR(name) return CONT(function(cont,env) cont(quickApp:internalStorageGet(name)) end, {'ivar', name}) end
 
@@ -603,7 +609,7 @@ local function EXPR(expr,opts)
     local res = {}
     local cont = opts.cont or function(...) 
       res = {...} 
-      if not opts.nolog then print(args2str(...)) end 
+      if not opts.no_expr_result then print(args2str(...)) end 
     end
     local src = opts.src or "<expr>"
     local err = opts.err or function(str) print(fmt("❌ '%s': %s", src // 80,str)) end

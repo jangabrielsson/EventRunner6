@@ -46,7 +46,8 @@ function QuickApp:main(er)
     end,100) 
     return 2000 
   end
-  
+  A=99
+  rule("126:value=88",{tree=true})
   -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
   -- reg('R1') rule("#foo1 => a1 = 42; post(#a1)")
@@ -182,12 +183,6 @@ function QuickApp:main(er)
   -- triggerVar.x5 = false 
   -- rule("trueFor(00:00:08, test.SWITCH:isOn) => log('xx is true for 5 sec')")
   -- rule("test.SWITCH:on; wait(00:00:07); test.SWITCH:off")
-
-
-
-rule("global('Bezetting_Keuken2')")
-
-rule([[return $Bezetting_Keuken == 'Vrij' ]])
 
 end
 

@@ -310,6 +310,9 @@ function evalArg(cont, env, ...) evalArgAux({}, cont, env, ...) end
 
 local evid = 0
 function findTriggers(c, cont, env, df)
+  if c == nil then
+    return
+  end
   local typ = etype(c)
   if typ == 'unop' then
     local op,arg,df = earg(c,1), earg(c,2),nil
@@ -337,7 +340,9 @@ function findTriggers(c, cont, env, df)
       if not(type(values) == 'table' and not values._isPropObject) then values = {values} end
       for _,o in ipairs(values) do
         local obj = ER.resolvePropObject(o)
-        assert(obj:isProp(prop), "Unknown property in getprop trigger: "..prop)
+        if not obj:isProp(prop) then
+          env.error(fmt("Unknown property in getprop trigger: %s %s",prop,tostring(obj)))
+        end
         if not obj:isTrigger(prop) then return cont() end
         local tr = obj:getTrigger(o,prop)
         env.triggers["DEV:"..tostring(o)..prop]=Event(tr)
@@ -475,7 +480,8 @@ function createER(qa)
       ER.customDefs(_er)
       print("=========== Loading rules ================")
       local t0 = os.clock()
-      _er.qa:main(_er) 
+      local stat,err = pcall(function() _er.qa:main(_er) end)
+      if not stat then fibaro.error(__TAG,err) end
       printf("=========== Load time: %.3fs ============",os.clock()-t0)
     end,1)
   end

@@ -448,6 +448,7 @@ function stat(tkns,ends)
   local pt = tkns.peek().type
   if tkns.matchpt('t_semi') or ends[pt] then return end
   local stp = tkns.peek()
+  
   if tkns.peek().type == 't_name' then 
     local stp = tkns.peek()
     local n = tkns.matcht('t_name')
@@ -515,8 +516,9 @@ function stat(tkns,ends)
     tkns.matcht('t_end',"Expected END in IF statement")
     return {type='if', args=ifs,_dbg=pt.dbg}
   end
-
-  if tkns.matchpt('t_case') then -- OK. case ... end
+  
+  -- OK. case ... end
+  if tkns.matchpt('t_case') then 
     local args = {}
     while tkns.matchpt('t_||') do
       local e = expr(tkns,caseExpr)
@@ -527,92 +529,106 @@ function stat(tkns,ends)
     tkns.matcht('t_end',"Expected END in CASE statement")
     return {type='if', args=args,_dbg=pt.dbg}
   end
-
+  
   if tkns.matchpt('t_for') then
-    if tkns.peek(2).opval == 'assign' then -- OK. for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end
-    local name = tkns.matcht('t_name',"Expected loop variable name")
-    local var = {type='name',value=name.value,_dbg=name.dbg,vt=varType(name.value)}
-    tkns.match('opval','assign',"Expected '=' in FOR loop")
-    local start = expr(tkns)
-    tkns.matcht('t_comma',"Expected ',' in FOR loop")
-    local stop = expr(tkns,{'t_comma','t_do','t_eof'})
-    local step
-    if tkns.matchpt('t_comma') then
-      step = expr(tkns,{'t_comma','t_do','t_eof'})
-    else 
-      step = {type='num',value=1,const=true,_dbg=tkns.peek().dbg} 
+    -- OK. for Name ‘=’ exp ‘,’ exp [‘,’ exp] do block end
+    if tkns.peek(2).opval == 'assign' then 
+      local name = tkns.matcht('t_name',"Expected loop variable name")
+      local var = {type='name',value=name.value,_dbg=name.dbg,vt=varType(name.value)}
+      tkns.match('opval','assign',"Expected '=' in FOR loop")
+      local start = expr(tkns)
+      tkns.matcht('t_comma',"Expected ',' in FOR loop")
+      local stop = expr(tkns,{'t_comma','t_do','t_eof'})
+      local step
+      if tkns.matchpt('t_comma') then
+        step = expr(tkns,{'t_comma','t_do','t_eof'})
+      else 
+        step = {type='num',value=1,const=true,_dbg=tkns.peek().dbg} 
+      end
+      tkns.matcht('t_do',"Expected DO in FOR loop")
+      local body = block(tkns,endEnd)
+      tkns.matcht('t_end',"Expected END in FOR loop")
+      body.scope = nil -- we always have outer scope for loop var...
+      local d = {type='block',scope=true,statements={
+        {type='assign',vars={var},exprs={start},_dbg=name.dbg},
+        {type='loop',statements={
+          {type='breakif',
+          cond={type='binop',op='gt',exp1=var,exp2=stop,_dbg=name.dbg},
+          _dbg=body._dbg
+        },
+        body,
+        {type='incvar',name=name.value,op='add',value=step,_dbg=step._dbg}
+      }}}}
+      return d
+    else -- for namelist in exprlist do block_end
+      local n = namelist(tkns)
+      if #n < 1 or #n > 2 then perror("Expected 1 or 2 variables in FOR in loop",tkns.peek()) end
+      if #n == 1 then n[2] = '_' end
+      tkns.matcht('t_in',"Expected 'in' in FOR loop")
+      local e = exprlist(tkns)
+      tkns.matcht('t_do',"Expected DO in FOR loop")
+      local b = block(tkns,endEnd)
+      tkns.matcht('t_end',"Expected END in FOR loop")
+      return {type='forin',names=n,exp=e,body=b,_dbg=pt.dbg} 
     end
-    tkns.matcht('t_do',"Expected DO in FOR loop")
-    local body = block(tkns,endEnd)
-    tkns.matcht('t_end',"Expected END in FOR loop")
-    body.scope = nil -- we always have outer scope for loop var...
-    local d = {type='block',scope=true,statements={
-      {type='assign',vars={var},exprs={start},_dbg=name.dbg},
-      {type='loop',statements={
-        {type='breakif',
-        cond={type='binop',op='gt',exp1=var,exp2=stop,_dbg=name.dbg},
-        _dbg=body._dbg
-      },
-      body,
-      {type='incvar',name=name.value,op='add',value=step,_dbg=step._dbg}
-    }}}}
-    return d
-  else -- for namelist in exprlist do block_end
-    local n = namelist(tkns)
-    if #n < 1 or #n > 2 then perror("Expected 1 or 2 variables in FOR in loop",tkns.peek()) end
-    if #n == 1 then n[2] = '_' end
-    tkns.matcht('t_in',"Expected 'in' in FOR loop")
-    local e = exprlist(tkns)
-    tkns.matcht('t_do',"Expected DO in FOR loop")
-    local b = block(tkns,endEnd)
-    tkns.matcht('t_end',"Expected END in FOR loop")
-    return {type='forin',names=n,exp=e,body=b,_dbg=pt.dbg} 
   end
-end
-if tkns.matchpt('t_function') then -- OK. function funcname funcbody
-  local n = funcname(tkns)
-  local b = funcbody(tkns)
-  return {type='functiondef',name=n,fun={type='func'..'tion',params=b.params,body=b.block,_dbg=pt.dbg}}
-end
-if tkns.matchpt('t_local') then
-  if tkns.matchpt('t_function') then -- local function Name funcbody
-    local n = tkns.matcht('t_name',"Expected FUNCTION name")
-    scope.addLocal(n.value)
+  
+  if tkns.matchpt('t_function') then -- OK. function funcname funcbody
+    local n = funcname(tkns)
     local b = funcbody(tkns)
-    return {type='localfunction',name=n,body=b,_dbg=pt.dbg}
-  else -- OK. local namelist [‘=’ exprlist]
-    local n = namelist(tkns)
-    for _,name in ipairs(n) do scope.addLocal(name) end
-    local e
-    if tkns.matchp('opval','assign') then
-      e = exprlist(tkns)
+    return {type='functiondef',name=n,fun={type='func'..'tion',params=b.params,body=b.block,_dbg=pt.dbg}}
+  end
+  if tkns.matchpt('t_local') then
+    if tkns.matchpt('t_function') then -- local function Name funcbody
+      local n = tkns.matcht('t_name',"Expected FUNCTION name")
+      scope.addLocal(n.value)
+      local b = funcbody(tkns)
+      return {type='localfunction',name=n,body=b,_dbg=pt.dbg}
+    else -- OK. local namelist [‘=’ exprlist]
+      local n = namelist(tkns)
+      for _,name in ipairs(n) do scope.addLocal(name) end
+      local e
+      if tkns.matchp('opval','assign') then
+        e = exprlist(tkns)
+      end
+      return {type='local',names=n,exprs=e,_dbg=pt.dbg}
     end
-    return {type='local',names=n,exprs=e,_dbg=pt.dbg}
   end
-end
-if tkns.matchpt('t_lcur') then -- OK. tableconstructor
-  local tab = tablevalue(tkns)
-  tkns.matcht('t_ddot',": expected for table property call")
-  local n = tkns.matcht('t_name',"Expected property name after ':'").value
-  if tkns.peek().opval == 'assign' then
-    tkns.next()
-    local val = expr(tkns,exprEnd)
-    return {type='assign',vars={{type='getprop',prop=n,obj=tab,_dbg=pt.dbg}},exprs={val},_dbg=pt.dbg}
+  if tkns.matchpt('t_lcur') then -- OK. tableconstructor
+    local tab = tablevalue(tkns)
+    tkns.matcht('t_ddot',": expected for table property call")
+    local n = tkns.matcht('t_name',"Expected property name after ':'").value
+    if tkns.peek().opval == 'assign' then
+      tkns.next()
+      local val = expr(tkns,exprEnd)
+      return {type='assign',vars={{type='getprop',prop=n,obj=tab,_dbg=pt.dbg}},exprs={val},_dbg=pt.dbg}
+    end
+    return {type='prop',prop=n,obj=tab,_dbg=pt.dbg}
   end
-  return {type='prop',prop=n,obj=tab,_dbg=pt.dbg}
-end
-if tkns.peek().type=='num' then
-  local num = tkns.matcht('num')
-  tkns.matcht('t_ddot',": expected for number property call")
-  local n = tkns.matcht('t_name',"Expected property name after ':'").value
-  if tkns.matchp('opval','assign') then
-    local val = expr(tkns)
-    return {type='putprop',prop=n,obj=num,expr=val,_dbg=pt.dbg}
+  if tkns.peek().type=='num' then
+    local pt = tkns.peek()
+    local num = tkns.matcht('num')
+    if tkns.peek().type ~= 't_ddot' then 
+      perror("Expected ':' for number property call",pt) 
+    end
+    local v = prefixexpr(tkns,{type='num',value=num.value,_dbg=num.dbg,const=true})
+    if v.type=='call' or v.type == 'objcall' then 
+      perror("Expected ':' for number property call",pt)
+    elseif v.type=='getprop' and not (tkns.peek().opval=='assign' or tkns.matchpt('t_comma')) then
+      return v
+    else -- OK. varlist ‘=’ exprlist
+      local vl = varlist(tkns,v)
+      --local t = tkns.match('opval','assign',"Expected '=' in assignment")
+      local t = tkns.peek()
+      if not tkns.matchp('opval','assign') then 
+        perror("Expected '=' in assignment",stp) 
+      end
+      local e = exprlist(tkns)
+      return {type='assign',vars=vl,exprs=e,_dbg=t.dbg}
+    end
   end
-  return {type='getprop',prop=n,obj=num,_dbg=pt.dbg}
-end
-local tp = tkns.peek()
-perror(fmt("unexpected token '%s'",tp.opval or tp.value or tp.type),tkns.peek())
+  local tp = tkns.peek()
+  perror(fmt("unexpected token '%s'",tp.opval or tp.value or tp.type),tkns.peek())
 end
 
 function namelist(tkns)

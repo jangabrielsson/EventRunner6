@@ -20,8 +20,9 @@ function builtin.log(...) -- printable tables and #C:color# tag
     local typ = type(a)
     n = n+1
     if typ == 'string' then args[i] = detag(a)
-    elseif typ == 'table' then 
-      if getmetatable(typ).__tostring then args[i] = tostring(a)
+    elseif typ == 'table' or typ == 'userdata' then 
+      local mt = getmetatable(a)
+      if mt and mt.__tostring then args[i] = tostring(a)
       else args[i] = json.encodeFast(a) end
     end
   end
@@ -172,6 +173,20 @@ function ER.customDefs(er)
     if d0.month > 7 then t0 = t0 + 3600 end
     return t0
   end
+  
+    -- Example of home made property object
+  Weather = {}
+  er.definePropClass("Weather") -- Define custom weather object
+  function Weather:__init() PropObject.__init(self) end
+  function Weather.getProp.temp(prop,env) return api.get("/weather").Temperature end
+  function Weather.getProp.humidity(prop,env) return  api.get("/weather").Humidity end
+  function Weather.getProp.wind(prop,env) return  api.get("/weather").Wind end
+  function Weather.getProp.condition(prop,env) return  api.get("/weather").WeatherCondition end
+  function Weather.trigger.temp(prop) return {type='weather', property='Temperature'} end
+  function Weather.trigger.humidity(prop) return {type='weather', property='Humidity'} end
+  function Weather.trigger.wind(prop) return {type='weather', property='Wind'} end
+  function Weather.trigger.condition(prop) return {type='weather', property='WeatherCondition'} end
+  var.weather = Weather()
   
   ------- Patch fibaro.call to track manual switches -------------------------
   local lastID,switchMap = {},{}

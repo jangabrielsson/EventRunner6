@@ -116,6 +116,57 @@ trueFor(00:05,sensor:safe) => lamp:off       -- Temporal condition
 
 ## Execution Model
 
+### Rule Compilation and Event-Driven Execution
+
+```mermaid
+flowchart TD
+    subgraph "Rule Definition Phase"
+        A["EventScript Rule: 78:isOn => lamp:on"] --> B[Parser]
+        B --> C[AST]
+        C --> D["Compiler (CPS Transform)"]
+        D --> E["Compiled Rule Function (with continuations)"]
+        D --> F["Event Dependencies: {type='device', id=78, property='value'}"]
+    end
+    
+    subgraph "Event Registration Phase"
+        F --> G[addEventListener]
+        G --> H["Event Listener Map: device:78 → [rule1, rule2, ...] timer:sunset → [rule5, ...] custom:security → [rule8, ...]"]
+    end
+    
+    subgraph "Runtime Execution Phase"
+        I["Device/Timer/User Event: {type='device', id=78, property='value', value=true}"] --> J[Event Dispatcher]
+        J --> H
+        H --> K["Find Matching Rules for event pattern"]
+        K --> L["Rule 1: Check Trigger 78:isOn == true?"]
+        K --> M["Rule N: Check Trigger 78:isOn & other_condition?"]
+        
+        L --> N{Trigger Matches?}
+        M --> O{Trigger Matches?}
+        
+        N -->|Yes| P["Execute Rule CPS Function: lamp:on(continuation)"]
+        N -->|No| Q[Skip Rule]
+        O -->|Yes| R["Execute Rule CPS Function: complex_actions(continuation)"]
+        O -->|No| S[Skip Rule]
+        
+        P --> T["Device Action: api.post('/devices/lamp/action/turnOn')"]
+        R --> U["Complex Actions: wait, multiple devices, etc."]
+        
+        T --> V[Continue/Complete]
+        U --> W["setTimeout for wait() or next action in chain"]
+        W --> V
+    end
+    
+    style A fill:#fff3e0
+    style E fill:#e8f5e8
+    style F fill:#e3f2fd
+    style H fill:#f3e5f5
+    style I fill:#ffebee
+    style P fill:#e8f5e8
+    style R fill:#e8f5e8
+    style T fill:#fff8e1
+    style U fill:#fff8e1
+```
+
 ### 1. Event-Driven Architecture
 
 The function `eval(str)` takes a string in EventScript notation and compiles and runs it.

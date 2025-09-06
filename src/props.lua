@@ -278,6 +278,8 @@ function NumberPropObject:isTrigger(prop) return (getProps[prop] or {})[5] end
 function NumberPropObject:getTrigger(id, prop) return {type='device', id = self.id, property =  getProps[prop][3]} end
 
 local numObjects = {}
+local function preResolvePropObject(id,obj) numObjects[id] = obj end
+
 local function resolvePropObject(obj)
   if type(obj) == 'userdata' and obj._isPropObject then return obj
   elseif type(obj) == 'number' then 
@@ -335,3 +337,4 @@ end
 ER.executeGetProp = executeGetProp
 ER.executeSetProp = executeSetProp
 ER.resolvePropObject = resolvePropObject
+ER.preResolvePropObject = preResolvePropObject
