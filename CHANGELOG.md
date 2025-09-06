@@ -1,5 +1,30 @@
 # Changelog
 
+## [v0.0.31] - 2025-09-06
+
+## Changes in v0.0.31
+
+- ✨ **Feature**: Refactor and enhance EventRunner 6 functionality
+  - Removed outdated release notes for versions 0.0.22 to 0.0.26.
+  - Added new features and improvements in the builtins, compiler, parser, props, rule, and tests modules.
+  - Introduced a custom Weather property object with various weather-related properties and triggers.
+  - Improved error handling for global variables and property resolution.
+  - Enhanced logging options for rule events and improved documentation for EventScript.
+  - Updated rule handling logic and added support for new syntax in the parser.
+  - Added tests for new features and ensured existing functionality remains intact.
+- 📚 **Docs**: update ToDo list with completed tasks
+- 🐛 **Fix**: id:prop assignment when id is number
+- 🐛 **Fix**: add warnings for undefined GV and runtime errors
+- 📚 **Docs**: update Recipes.md for clarity and accuracy
+- 🐛 **Fix**: correct time format for light scheduling rules
+- 🐛 **Fix**: update Earth Hour section title for spelling
+- ✨ **Feature**: add restart rule for Daylight Savings Time adjustments
+- 🐛 **Fix**: correct comparison operator in light activation rule
+- ♻️ **Refactor**: increase loop iterations in stress test
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.30] - 2025-09-05
 
 ## Changes in v0.0.30
