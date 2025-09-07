@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.0.35] - 2025-09-07
+
+## Changes in v0.0.35
+
+- 🐛 **Fix**: correct rule validation for daily and interval triggers
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.34] - 2025-09-07
 
 ## Changes in v0.0.34
