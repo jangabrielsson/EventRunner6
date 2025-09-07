@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.34] - 2025-09-07
+
+## Changes in v0.0.34
+
+- 🐛 **Fix**: improve argument checking in unary operations
+- ♻️ **Refactor**: restructure unary operation functions for better error handling
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.33] - 2025-09-07
 
 ## Changes in v0.0.33
