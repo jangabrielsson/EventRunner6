@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.32] - 2025-09-07
+
+## Changes in v0.0.32
+
+- ✨ **Feature**: add dim light support with customizable curves
+- 🐛 **Fix**: improve error handling in eval function
+- 🐛 **Fix**: update property access syntax in parser
+- ♻️ **Refactor**: enhance rule logging with warning prefix
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.31] - 2025-09-06
 
 ## Changes in v0.0.31
