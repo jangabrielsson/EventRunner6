@@ -327,22 +327,28 @@ local function BINOP(op,exp1,exp2)
   end, {'binop', op, exp1, exp2})
 end
 
+local function checkArg1(a,t1,b,t2,env,e)
+  if type(a) ~= t1 then env.error(fmt("%s: Expected %s, got: %s",e,t1,a))
+  elseif type(b) ~= t2 then env.error(fmt("%s: Expected %s, got: %s",e,t2,b)) 
+  else return true end
+end
+
 local unOpFuns = {
-  plus = function(v,a,b,env) return ER.toTime("+/"..v) end,
-  next = function(v,a,b,env) return ER.toTime("n/"..v) end,
-  today = function(v,a,b,env) return ER.toTime("t/"..v) end,
-  add = function(v,a,b,env) return v+(a or b) end,
-  neg = function(v,a,b,env) return - v end,
-  sub = function(v,a,b,env) return a and a-v or v-b end,
-  mul = function(v,a,b,env) return v*(a or b) end,
-  div = function(v,a,b,env) return a and a/v or v/b  end,
-  ['not'] = function(v,a,b,env) return not v  end,
-  daily = function(v,a,b,env)
+  plus = function(v,a,b,e,env) return ER.toTime("+/"..v) end,
+  next = function(v,a,b,e,env) return ER.toTime("n/"..v) end,
+  today = function(v,a,b,e,env) return ER.toTime("t/"..v) end,
+  add = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return v+(a or b) end end,
+  neg = function(v,a,b,e,env) return - v end,
+  sub = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return a and a-v or v-b end end,
+  mul = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return v*(a or b) end end,
+  div = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return a and a/v or v/b  end end,
+  ['not'] = function(v,a,b,e,env) return not v  end,
+  daily = function(v,a,b,e,env)
     local e = env.trigger
     if not e then return env.error("No trigger in environment") end
     return e.type == 'Daily'  -- False if not a daily event triggering
   end,
-  interv = function(v,a,b,env)
+  interv = function(v,a,b,e,env)
     local e = env.trigger
     if not e then return env.error("No trigger in environment") end
     return e.type == 'Interval'  -- False if not a daily event triggering
@@ -354,7 +360,7 @@ local function UNOP(op, expr, v1, v2) --UNOP('add', expr, 1) end
   return CONT(function(cont, env)
     expr(function(val)
       if unOpFuns[op] then
-        local res = unOpFuns[op](val,v1,v2,env)
+        local res = unOpFuns[op](val,v1,v2,expr,env)
         cont(res)
       else
         env.error("Unknown operator: " .. tostring(op))

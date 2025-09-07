@@ -48,8 +48,15 @@ function QuickApp:main(er)
   end
   A=99
 
-  rule("{1,21,41}:on")
-  -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
+rule([[@sunset-00:33 & month('jan') =>
+   $Gordijn_Licht = 'Avondrood';  		 
+        log('#C:pink#$Gordijn_Licht = Avondrood - januari');
+        log('60-A');
+wait(0)
+]])
+rule("@now+1 => return ddd+1")
+
+-- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
   -- reg('R1') rule("#foo1 => a1 = 42; post(#a1)")
   -- rule("#a1 => if a1 == 42 then ding('R1');  HT.kitchen.light.roof:on; end")
