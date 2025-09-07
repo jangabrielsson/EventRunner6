@@ -48,13 +48,11 @@ function QuickApp:main(er)
   end
   A=99
 
-rule([[@sunset-00:33 & month('jan') =>
-   $Gordijn_Licht = 'Avondrood';  		 
-        log('#C:pink#$Gordijn_Licht = Avondrood - januari');
-        log('60-A');
-wait(0)
-]])
-rule("@now+1 => return ddd+1")
+rule("@@00:30 & 10:00..15:00 => log('Time trigger OK')")
+
+  -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
+  
+  -- reg('E1') rule("log('ASF=%s',ASF(4,5,function(res) log('Callback ASF=%s',res); ding('E1') end)); ding('E1')")
 
 -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
@@ -198,6 +196,6 @@ end
 function QuickApp:onInit()
   local er = fibaro.EventRunner(self)
   self:debug(er)
-  --er.speed(4*24)
-  er.start()
+  er.speed(4*24)
+  --er.start()
 end

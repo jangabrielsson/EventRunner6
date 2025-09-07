@@ -274,7 +274,7 @@ local function defRule(expr, opts)
 
   findTriggers(head, cont, env)
 
-  if env.interval and env.daily then return env.error("Only one @daily or @@interval per rule") end
+  if env.interval and env.seenDaily then return env.error("Only one @daily or @@interval per rule") end
   if env.daily then env.triggers["D"]=Event({type='Daily',id=env.id}) end
   
   if env.interval == nil and env.daily == nil and next(env.triggers)==nil then
