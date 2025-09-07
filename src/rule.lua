@@ -21,6 +21,7 @@ local function ERROR(...) fibaro.error(__TAG,safeFmt(...)) end
 local function WARNING(...) fibaro.warning(__TAG,safeFmt(...)) end
 
 local dfltPrefix = {
+  warningPrefix = "⚠️",
   ruleDefPrefix = "✅",
   triggerListPrefix = "⚡",
   dailyListPrefix = "🕒",

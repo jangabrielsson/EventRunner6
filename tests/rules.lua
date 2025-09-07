@@ -47,7 +47,8 @@ function QuickApp:main(er)
     return 2000 
   end
   A=99
-  rule("126:value=88",{tree=true})
+
+  rule("{1,21,41}:on")
   -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
   -- reg('R1') rule("#foo1 => a1 = 42; post(#a1)")

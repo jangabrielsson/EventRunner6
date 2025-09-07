@@ -929,7 +929,7 @@ local function eval(str,opts)
     end
     return e
   end)
-  if not stat then print(ast) return idfun end
+  if not stat then fibaro.error(__TAG,fmt("%s %s","❌",tostring(ast))) return idfun end
   if opts.tree then print(json.encodeFormated(ast)) end
   locals = nil
     local cstat,res = pcall(function()

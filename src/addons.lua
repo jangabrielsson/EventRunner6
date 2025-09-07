@@ -96,6 +96,43 @@ local function loadFuns(er)
     var.hc3api = api2
     var._hc3api = hc3api
 
+    ---- Dim light support
+    local equations = {}
+    function equations.linear(t, b, c, d) return c * t / d + b; end
+    function equations.inQuad(t, b, c, d) t = t / d; return c * (t ^ 2) + b; end
+    function equations.inOutQuad(t, b, c, d) t = t / d * 2; return t < 1 and c / 2 * (t ^ 2) + b or -c / 2 * ((t - 1) * (t - 3) - 1) + b end
+    function equations.outInExpo(t, b, c, d) return t < d / 2 and equations.outExpo(t * 2, b, c / 2, d) or equations.inExpo((t * 2) - d, b + c / 2, c / 2, d) end
+    function equations.inExpo(t, b, c, d) return t == 0 and b or c * (2 ^ (10 * (t / d - 1))) + b - c * 0.001 end
+    function equations.outExpo(t, b, c, d) return t == d and  b + c or c * 1.001 * ((2 ^ (-10 * t / d)) + 1) + b end
+    function equations.inOutExpo(t, b, c, d)
+        if t == 0 then return b elseif t == d then return b + c end
+        t = t / d * 2
+        if t < 1 then return c / 2 * (2 ^ (10 * (t - 1))) + b - c * 0.0005 else t = t - 1; return c / 2 * 1.0005 * ((2 ^ (-10 * t)) + 2) + b end
+    end
+    
+    local function dimLight(id,sec,dir,step,curve,start,stop)
+        assert(tonumber(sec), "Bad dim args for deviceID:%s",id)
+        local f = curve and equations[curve] or equations['linear']
+        dir,step = dir == 'down' and -1 or 1, step or 1
+        start,stop = start or 0,stop or 99
+        fibaro.post({type='%dimLight',id=id,sec=sec,dir=dir,fun=f,t=dir == 1 and 0 or sec,start=start,stop=stop,step=step,_sh=true})
+    end
+    
+    extraSetups[#extraSetups+1] = function()
+        fibaro.event({type='%dimLight'},function(env)
+            local e = env.event
+            local ev,currV = e.v or -1,tonumber(fibaro.getValue(e.id,"value"))
+            if not currV then
+                fibaro.warningf(__TAG,"Device %d can't be dimmed. Type of value is %s",e.id,type(fibaro.getValue(e.id,"value")))
+            end
+            if e.v and math.abs(currV - e.v) > 2 then return end -- Someone changed the lightning, stop dimming
+            e.v = math.floor(e.fun(e.t,e.start,(e.stop-e.start),e.sec)+0.5)
+            if ev ~= e.v then fibaro.call(e.id,"setValue",e.v) end
+            e.t=e.t+e.dir*e.step
+            if 0 <= e.t and  e.t <= e.sec then fibaro.post(e,os.time()+e.step) end
+        end)
+    end
+
 end
 
 setTimeout(function() fibaro.loadLibrary(loadFuns) end,0)

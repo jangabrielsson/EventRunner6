@@ -1,4 +1,6 @@
 DST event - done
 long setTimeout - done
-warn undefined GV
+warn undefined GV, 50%, use env.warning
+add warning log opts.warning/env.warning
 Better runtime errors (source line?)
+parse error with "❌", - done
