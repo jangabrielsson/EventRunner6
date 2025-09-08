@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.0.37] - 2025-09-08
+
+## Changes in v0.0.37
+
+- 🐛 **Fix**: update key property handling in getProps
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.36] - 2025-09-08
 
 ## Changes in v0.0.36
