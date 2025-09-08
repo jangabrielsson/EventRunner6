@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.0.38] - 2025-09-08
+
+## Changes in v0.0.38
+
+- 🐛 **Fix**: update skipTrigger logic in rule creation
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.37] - 2025-09-08
 
 ## Changes in v0.0.37
