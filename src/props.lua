@@ -73,7 +73,7 @@ getProps.scene={'device',sae,'sceneActivationEvent',nil,true}
 getProps.access={'device',ace,'accessControlEvent',nil,true}
 getProps.central={'device',cce,'centralSceneEvent',nil,true}
 local keyMT = { __tostring = function(t) return string.format("%s:%s",t.keyId or '',t.keyAttribute or '') end }
-getProps.key={'device',function(id,_,ev) local e = cce(id,_,ev); return setmetatable(e or {},keyMT) end,'centralSceneEvent',nil,true}
+getProps.key={'device',function(id,_,ev) local e = cce(id,_,ev); e = e or {} e.id,e.attr = e.keyId,e.keyAttribute return setmetatable(e or {},keyMT) end,'centralSceneEvent',nil,true}
 getProps.safe={'device',off,'value',mapAnd,true}
 getProps.breached={'device',on,'value',mapOr,true}
 getProps.isOpen={'device',on,'value',mapOr,true}

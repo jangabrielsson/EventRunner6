@@ -199,7 +199,7 @@ function QuickApp:main(er)
   }
   var.HT = HT
   var.remoteControls_Pracovna={HT.Pracovna.Tlacitko8tlpracov,HT.Pracovna.Tlacitko4tlpracov,HT.Pracovna.VypPracovna,HT.Pracovna.VypPracovnalamp,HT.Pracovna.VypPracovnastul}
-  rule("remoteControls_Pracovna:id:key == '1:Pressed' => log('Press 1 in any remotes %s',tostring(remoteControls_Pracovna:id:key))")
+  rule("remoteControls_Pracovna:id:key.id == 1 => log('Press 1 in any remotes %s',tostring(remoteControls_Pracovna:id:key))")
 
   rule("wait(1); fibaro.call(HT.Pracovna.Tlacitko8tlpracov,'emitCentralSceneEvent',1,'Pressed')")
 
