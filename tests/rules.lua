@@ -20,7 +20,7 @@ local _,_ = api.post("/globalVariables/",{name="GV1",value="0"})
 function QuickApp:main(er)
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
   local function loadDevice(name) return er.loadSimDevice("/Users/jangabrielsson/Documents/dev/plua_new/plua/examples/fibaro/stdQAs/"..name..".lua") end
-  er.opts = { started = false, check = false, result = false, triggers=true, } --nolog=true }
+  er.opts = { started = false, check = true, result = false, triggers=true, } --nolog=true }
   
   function var.click(id,val) 
     api.post("/plugins/publishEvent",{
@@ -30,15 +30,15 @@ function QuickApp:main(er)
     })
   end
   
-  -- var.HT = {
-  --   remote = loadDevice("remoteController"),
-  --   kitchen = {
-  --     light = {
-  --       roof = loadDevice("binarySwitch"),
-  --       window =  loadDevice("multilevelSwitch"),
-  --     }
-  --   }
-  -- }
+  var.HT = {
+    remote = loadDevice("remoteController"),
+    kitchen = {
+      light = {
+        roof = loadDevice("binarySwitch"),
+        window =  loadDevice("multilevelSwitch"),
+      }
+    }
+  }
   
   function var.async.ASF(cb, x,y) -- Define an async function
     setTimeout(function() 
@@ -187,28 +187,33 @@ function QuickApp:main(er)
   -- rule("trueFor(00:00:08, test.SWITCH:isOn) => log('xx is true for 5 sec')")
   -- rule("test.SWITCH:on; wait(00:00:07); test.SWITCH:off")
 
-  
-  local HT = {
-    Pracovna = {
-      Tlacitko8tlpracov = loadDevice("remoteController"),
-      Tlacitko4tlpracov = loadDevice("remoteController"),
-      VypPracovna = loadDevice("remoteController"),
-      VypPracovnalamp = loadDevice("remoteController"),
-      VypPracovnastul = loadDevice("remoteController"),
-    }
-  }
-  var.HT = HT
-  var.remoteControls_Pracovna={HT.Pracovna.Tlacitko8tlpracov,HT.Pracovna.Tlacitko4tlpracov,HT.Pracovna.VypPracovna,HT.Pracovna.VypPracovnalamp,HT.Pracovna.VypPracovnastul}
-  rule("remoteControls_Pracovna:id:key.id == 1 => log('Press 1 in any remotes %s',tostring(remoteControls_Pracovna:id:key))")
+   fibaro.EventRunner.debugFlags.sourceTrigger = true
+  var.keuken = { deur = loadDevice("doorSensor"), pir = loadDevice("motionSensor") }
+  var.appPhone = { beveiligen_Appartement = loadDevice("binarySwitch") }
 
-  rule("wait(1); fibaro.call(HT.Pracovna.Tlacitko8tlpracov,'emitCentralSceneEvent',1,'Pressed')")
+  print("WAIT")
+  setTimeout(function()
+    print("START")
+  rule("global('Verl_Instelling_Dagdeel')")
+
+rule([[ log('Rule started %s %s %s',$Verl_Instelling_Dagdeel,appPhone.beveiligen_Appartement:isOn,keuken.deur:isOpen) &
+      (06:07:30..10:15 & appPhone.beveiligen_Appartement:isOn & 
+$Verl_Instelling_Dagdeel == 'Slapen' & (keuken.deur:isOpen | keuken.pir:breached)) =>
+    log('Wakker worden!');
+wait(0)]])
+  
+  rule("$Verl_Instelling_Dagdeel='Slapen'") -- set global
+  end,2000)
+
+  fibaro.call(var.keuken.deur,"breached",true) -- open doorSensor
+  fibaro.call(var.appPhone.beveiligen_Appartement,"turnOn") -- app switch
 
 end
 
---%%time:2025/01/01 12:00:00 
+--%%time:2025/01/01 09:00:00
 function QuickApp:onInit()
   local er = fibaro.EventRunner(self)
   self:debug(er)
-  er.speed(4*24)
-  --er.start()
+  --er.speed(4*24)
+  er.start()
 end

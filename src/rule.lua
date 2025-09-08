@@ -147,7 +147,7 @@ local function createRule(expr, data, opts)
     sourceTrigger:subscribe(dailyEvent,function(event) 
       self:start(event.event) 
     end)
-    skipTrigger = true
+    skipTrigger = data.seenDaily
   end
   
   if self.interval then
