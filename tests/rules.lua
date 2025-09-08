@@ -30,15 +30,15 @@ function QuickApp:main(er)
     })
   end
   
-  var.HT = {
-    remote = loadDevice("remoteController"),
-    kitchen = {
-      light = {
-        roof = loadDevice("binarySwitch"),
-        window =  loadDevice("multilevelSwitch"),
-      }
-    }
-  }
+  -- var.HT = {
+  --   remote = loadDevice("remoteController"),
+  --   kitchen = {
+  --     light = {
+  --       roof = loadDevice("binarySwitch"),
+  --       window =  loadDevice("multilevelSwitch"),
+  --     }
+  --   }
+  -- }
   
   function var.async.ASF(cb, x,y) -- Define an async function
     setTimeout(function() 
@@ -46,9 +46,6 @@ function QuickApp:main(er)
     end,100) 
     return 2000 
   end
-  A=99
-
-rule("@@00:30 & 10:00..15:00 => log('Time trigger OK')")
 
   -- reg('E1') rule("log('ASF=%s',ASF(4,5)); ding('E1')")
   
@@ -171,7 +168,7 @@ rule("@@00:30 & 10:00..15:00 => log('Time trigger OK')")
   
   shs = { getanswer = function(cb, query, speaker) print(cb,query,speaker) end }
   
-  var.test = {SWITCH = var.HT.kitchen.light.roof }
+  --var.test = {SWITCH = var.HT.kitchen.light.roof }
   -- rule("AI_speakers = '192.168.1.239'")
   -- rule("log('AI_speakers=%s',AI_speakers)")
   -- rule("SWITCH:isOn => shs.getanswer(callback, query, AI_speakers)")
@@ -189,6 +186,22 @@ rule("@@00:30 & 10:00..15:00 => log('Time trigger OK')")
   -- triggerVar.x5 = false 
   -- rule("trueFor(00:00:08, test.SWITCH:isOn) => log('xx is true for 5 sec')")
   -- rule("test.SWITCH:on; wait(00:00:07); test.SWITCH:off")
+
+  
+  local HT = {
+    Pracovna = {
+      Tlacitko8tlpracov = loadDevice("remoteController"),
+      Tlacitko4tlpracov = loadDevice("remoteController"),
+      VypPracovna = loadDevice("remoteController"),
+      VypPracovnalamp = loadDevice("remoteController"),
+      VypPracovnastul = loadDevice("remoteController"),
+    }
+  }
+  var.HT = HT
+  var.remoteControls_Pracovna={HT.Pracovna.Tlacitko8tlpracov,HT.Pracovna.Tlacitko4tlpracov,HT.Pracovna.VypPracovna,HT.Pracovna.VypPracovnalamp,HT.Pracovna.VypPracovnastul}
+  rule("remoteControls_Pracovna:id:central.keyId==1 => log('Press 1 in any remotes')")
+
+  rule("wait(1); fibaro.call(HT.Pracovna.Tlacitko8tlpracov,'emitCentralSceneEvent',1,'Pressed')")
 
 end
 

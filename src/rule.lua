@@ -126,7 +126,8 @@ local function createRule(expr, data, opts)
   opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
 
   opts.cont = function(...) if opts.result then opts.result(self,...) end end
-  opts.err = opts.err or function(str) 
+  opts.err = opts.err or function(str,warning) 
+    if warning then end
     local msg = fmt("%s: %s (disabling)", self, str) 
     ERROR(msg)
     ER.sourceTrigger:post({type='rule-error',rule=self,message=msg},0)
@@ -390,12 +391,15 @@ function findTriggers(c, cont, env, df)
     if ER.triggerVars[name] then
       env.triggers['TV:'..name]=Event({type='trigger-variable',name=name, _df=df})
     end
+    cont()
   elseif typ == 'gvar' then
     local name = earg(c,1)
     env.triggers['GV:'..name]=Event({type='global-variable',name=name, _df=df})
+    cont()
   elseif typ == 'qvar' then
     local name = earg(c,1)
     env.triggers['QV:'..name]=Event({type='quickvar',id=quickApp.id,name=name, _df=df})
+    cont()
   elseif typ == 'aref' then
     scanArg(cont, env, df, eargs(c))
   else
