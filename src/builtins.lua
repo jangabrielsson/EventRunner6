@@ -91,7 +91,6 @@ function ER.customDefs(er)
     function var.async.trueFor(cb,time,expr)
     local trueFor = cb.env.rule.trueFor or {}
     cb.env.rule.trueFor = trueFor
-    print("OKOKOKOKOK")
     if expr then -- test is true
       if not trueFor.ref then -- new, start timer
         trueFor.trigger = cb.env.trigger
