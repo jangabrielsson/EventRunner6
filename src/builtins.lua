@@ -64,7 +64,7 @@ function builtin.ostime(t) return os.time(t) end
 
 function builtin.global(name)
   local s = fibaro.getGlobalVariable(name)     
-  api.post("/globalVariables/",{name=name})
+  local a,b = api.post("/globalVariables/",{name=name,value = ""})
   return s == nil,(s == nil and fmt("'%s' created",name) or fmt("'%s' exists",name))
 end
 

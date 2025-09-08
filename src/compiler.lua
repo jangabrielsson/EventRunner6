@@ -449,8 +449,13 @@ end
 
 local function GVAR(name)
   return CONT(function(cont,env)
-    local val = fibaro.getGlobalVariable(name)
-    if val == nil then fibaro.warning("Global variable not found: "..tostring(name)) end
+    if name == 'Beveiliging_Alarm' then
+      print(name)
+    end
+    local val,err = fibaro.getGlobalVariable(name)
+    if val == nil then 
+      fibaro.warning(__TAG,"Global variable not found: "..tostring(name))
+    end
     cont(ER.marshallFrom(val)) 
   end, {'gvar', name}) 
 end

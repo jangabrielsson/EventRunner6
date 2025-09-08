@@ -35,6 +35,9 @@ Welcome to EventScript! This tutorial will teach you how to create powerful home
       - [Try this](#try-this-7)
   - [Setting up a Home Table](#setting-up-a-home-table)
       - [Try this](#try-this-8)
+  - [Basic functionality](#basic-functionality)
+    - [Working with remotes](#working-with-remotes)
+    - [Working with alarms](#working-with-alarms)
   - [Common Home Automation Patterns](#common-home-automation-patterns)
     - [Morning Routine](#morning-routine)
     - [Security System](#security-system)
@@ -608,6 +611,137 @@ end
 #### Try this
 - Add another room or device to the `HT` structure and reference it in a new rule.
 - Create a list of lights (e.g., `var.allLights = {HT.livingroom.light.ceiling, HT.kitchen.light.ceiling}`) and turn them off together.
+
+## Basic functionality
+
+### Working with remotes
+
+Remote controls emit `centralSceneEvent` signals when buttons are pressed. EventRunner6 provides convenient properties to handle these events:
+
+```lua
+function QuickApp:main(er)
+  local rule, var = er.rule, er.variables
+  
+  -- Define your remote in the Home Table
+  var.HT = {
+    remotes = {
+      bedroom = 123,
+      kitchen = 124
+    }
+  }
+  
+  -- React to specific key presses
+  rule([[HT.remotes.bedroom:key == '1:Pressed' => HT.bedroom.light:on]])
+  rule([[HT.remotes.bedroom:key == '1:Hold' => HT.bedroom.light:off]])
+  rule([[HT.remotes.bedroom:key == '2:Pressed2' => HT.bedroom.fan:toggle]])  -- Double click
+  
+  -- Alternative syntax using individual properties
+  rule([[HT.remotes.kitchen:key.id == 1 & HT.remotes.kitchen:key.attr == 'Pressed' => 
+    log('Kitchen remote button 1 pressed')
+  ]])
+end
+```
+
+**Key attributes available:**
+- `'Pressed'` - Single button press
+- `'Hold'` - Button held down  
+- `'Release'` - Button released
+- `'HeldDown'` - Continuous hold signal
+- `'Pressed2'` - Double click
+- `'Pressed3'` - Triple click
+
+**Multi-remote handling:**
+```lua
+-- Monitor multiple remotes with one rule
+var.allRemotes = {HT.remotes.bedroom, HT.remotes.kitchen, HT.remotes.livingroom}
+
+rule([[allRemotes:id:key == '1:Pressed' => 
+  log('Button 1 pressed on remote %d', allRemotes:id)
+]])
+```
+
+### Working with alarms
+
+The HC3 alarm system uses partitions to organize security zones. EventRunner6 provides comprehensive alarm properties:
+
+```lua
+function QuickApp:main(er)
+  local rule, var = er.rule, er.variables
+  
+  -- Query alarm states
+  rule([[@08:00 => 
+    if 0:isArmed then 
+      log('House alarm is armed') 
+    else 
+      log('House alarm is disarmed') 
+    end
+  ]])
+  
+  -- Arm/disarm the alarm
+  rule([[@23:00 => 0:tryArm]])  -- Try to arm house (partition 0)
+  rule([[@07:00 => 0:armed = false]])  -- Disarm house
+  
+  -- Check for breaches
+  rule([[0:isAlarmBreached => 
+    log('SECURITY ALERT: House alarm breached!'); 
+    HT.security.siren:on
+  ]])
+end
+```
+
+**Available alarm properties:**
+
+**Query properties:**
+- `:armed` - Returns true if partition is armed
+- `:isArmed` - Same as :armed
+- `:isDisarmed` - Returns true if partition is disarmed
+- `:isAlarmBreached` - Returns true if partition is breached
+- `:isAlarmSafe` - Returns true if partition is safe
+
+**List properties (for multiple partitions):**
+- `:isAllArmed` - Returns true if all partitions are armed
+- `:isAnyDisarmed` - Returns true if any partition is disarmed
+- `:isAllAlarmBreached` - Returns true if all partitions are breached
+- `:isAnyAlarmSafe` - Returns true if any partition is safe
+
+**Control properties:**
+- `:armed = true/false` - Arms/disarms the partition
+- `:tryArm` - Attempts to arm (handles breached devices gracefully)
+
+**Handling arming conflicts:**
+
+When using `:tryArm`, if devices are breached, an event is posted with details:
+
+```lua
+-- Handle arming conflicts
+rule([[#alarm{property='delayed'} => 
+  log('Cannot arm - breached devices detected:'); 
+  for partitionId, devices in pairs(env.event.value) do 
+    log('Partition %s: devices %s', partitionId, table.concat(devices, ', ')) 
+  end; 
+  log('Disarming to prevent false alarm'); 
+  0:armed = false
+]])
+
+-- React to partition breaches
+rule([[#alarm{id='$id', property='breached'} => 
+  log('SECURITY BREACH in partition %s!', env.event.id); 
+  HT.security.lights:on; 
+  HT.security.siren:on
+]])
+
+-- React to house breach
+rule([[#alarm{property='homeBreached'} => 
+  log('HOUSE SECURITY BREACH!'); 
+  post(#securityProtocol)
+]])
+
+rule([[#securityProtocol => 
+  HT.all.lights:on; 
+  HT.security.siren:on; 
+  -- Add notification logic here
+]])
+```
 
 ## Common Home Automation Patterns
 

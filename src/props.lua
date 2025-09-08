@@ -57,12 +57,12 @@ getProps.last={'device',last,'value',nil,true}
 
 getProps.armed={'alarm',function(id) return  armState(id)=='armed' end,'armed',mapOr,true}
 getProps.tryArm={'alarm',tryArm,nil,'alarm',false}
-getProps.isArmed={'alarm',function(id) return partition(id).armed end,'armed',mapOr,true}
-getProps.isAllArmed={'alarm',function(id) return partition(id).armed end,'armed',mapAnd,true,true}
-getProps.isDisarmed={'alarm',function(id) return partition(id).armed==false end,'armed',mapAnd,true}
-getProps.isAnyDisarmed={'alarm',function(id) return partition(id).armed==false end,'armed',mapOr,true,false}
-getProps.isAlarmBreached={'alarm',function(id) return partition(id).breached end,'breached',mapOr,true}
-getProps.isAlarmSafe={'alarm',function(id) return partition(id).breached==false end,'breached',mapAnd,true}
+getProps.isArmed={'alarm',function(id) return partition(id).armed end,'armed',mapOr,true}             -- api.get("/alarms/v1/partitions/" .. id)
+getProps.isAllArmed={'alarm',function(id) return partition(id).armed end,'armed',mapAnd,true,true}    -- fibaro.getHomeArmState()
+getProps.isDisarmed={'alarm',function(id) return partition(id).armed==false end,'armed',mapAnd,true}  --  fibaro.getPartitionArmState(id)
+getProps.isAnyDisarmed={'alarm',function(id) return partition(id).armed==false end,'armed',mapOr,true,false} -- ER.alarmFuns.armPartition(id)
+getProps.isAlarmBreached={'alarm',function(id) return partition(id).breached end,'breached',mapOr,true}      -- ER.alarmFuns.unarmPartition(id)
+getProps.isAlarmSafe={'alarm',function(id) return partition(id).breached==false end,'breached',mapAnd,true}  -- ER.alarmFuns.tryArmPartition(id)
 getProps.isAllAlarmBreached={'alarm',function(id) return partition(id).breached end,'breached',mapAnd,true}
 getProps.isAnyAlarmSafe={'alarm',function(id) return partition(id).breached==false end,'breached',mapOr,true,false}
 

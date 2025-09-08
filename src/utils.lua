@@ -629,7 +629,9 @@ function SourceTrigger:__init()
   aEventEngine = self.eventEngine
   local function post(event,firingTime)
     setmetatable(event,EventMT)
-    if debugFlags.sourceTrigger then fibaro.trace(__TAG,fmt("SourceTrigger: %s",tostring(event) // (debugFlags.truncLog or 80))) end
+    if debugFlags.sourceTrigger and not (debugFlags.ignoreSourceTrigger and  debugFlags.ignoreSourceTrigger[event.type]) then 
+      fibaro.trace(__TAG,fmt("SourceTrigger: %s",tostring(event) // (debugFlags.truncLog or 100)))
+    end
     self.eventEngine.handleEvent(event,firingTime)
   end
   local function filter(ev)
