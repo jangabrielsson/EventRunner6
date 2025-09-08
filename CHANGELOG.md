@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.39] - 2025-09-08
+
+## Changes in v0.0.39
+
+- ✨ **Feature**: add release notes for v0.0.38
+- 🐛 **Fix**: update skipTrigger logic in rule creation
+- 📚 **Docs**: add forum post helper for release announcements
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.38] - 2025-09-08
 
 ## Changes in v0.0.38
