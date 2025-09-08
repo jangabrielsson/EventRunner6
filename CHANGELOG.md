@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.36] - 2025-09-08
+
+## Changes in v0.0.36
+
+- 🐛 **Fix**: log message
+- 🐛 **Fix**: correct error handling in rule creation
+- 🐛 **Fix**: ensure proper trigger handling in r
+- ♻️ **Refactor**: clean up commented-out code in tests
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.35] - 2025-09-07
 
 ## Changes in v0.0.35
