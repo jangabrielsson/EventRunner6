@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.0.40] - 2025-09-16
+
+## Changes in v0.0.40
+
+- ✨ **Feature**: add support for custom event triggers
+- 🐛 **Fix**: correct logic for async wait time adjustment
+- 🐛 **Fix**: ensure proper handling of debug information in mergeDbg
+- 🧪 **Test**: add tests for new event trigger functionality
+- ✨ **Feature**: enhance tutorial with basic functionality section
+- 📚 **Docs**: add forum post helper for release announcements
+- 🐛 **Fix**: update global variable handling in builtins
+- 🐛 **Fix**: improve global variable retrieval in compiler
+- ♻️ **Refactor**: streamline alarm property checks in props
+- 🐛 **Fix**: refine source trigger debug logic in utils
+- 🧪 **Test**: add alarm event handling in tests
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.39] - 2025-09-08
 
 ## Changes in v0.0.39
