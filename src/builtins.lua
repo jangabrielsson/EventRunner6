@@ -136,6 +136,7 @@ function ER.customDefs(er)
   end
   
   function var.async.wait(cb,time)
+    if time < ER.T2020 then time = time + ER.now() end
     if cb.env.waiting then cb.env.waiting(cb.env.rule,cb.env,time) end
     cb.env:setTimeout(function() 
       if cb.env.waited then cb.env.waited(cb.env.rule,cb.env,time) end

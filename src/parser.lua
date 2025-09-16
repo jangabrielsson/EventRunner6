@@ -382,7 +382,7 @@ end
 
 local function mergeDbg(...)
   local dbg = {...}
-  return {from=dbg[1]._dbg.from,to=dbg[#dbg]._dbg.to}
+  return {from=(dbg[1]._dbg or dbg[1].dbg).from,to=(dbg[#dbg]._dbg or dbg[#dbg].dbg).to}
 end
 
 local function Scope()
@@ -404,6 +404,7 @@ function block(tkns,ends) -- OK
   scope.push()
   local stats,ends = {},ends or blockEnd
   local t = tkns.peek()
+  local fp = t
   while not (ends[t.type] or t.type=='t_return') do
     local saveP = tkns.getP()
     local stat,err = pcall(function()
@@ -419,14 +420,16 @@ function block(tkns,ends) -- OK
       else error(err) end -- No an expression either, just error
     end
   end
-  if tkns.peek().type == 't_return' then
+  local ep = tkns.peek()
+  if ep.type == 't_return' then
     local r = retstat(tkns,ends)
     if r then stats[#stats+1] = r end
+    ep = tkns.peek()
   end
   local bs = scope.hasBreaks() or scope.hasLocals()
   local locals = scope.hasLocals()
   scope.pop()
-  return {type='block', statements=stats, scope = bs, locals = locals, dbg=t.dbg}
+  return {type='block', statements=stats, scope = bs, locals = locals, dbg=mergeDbg(fp,ep)}
 end
 
 local varTypes={[""]='ev',["$"]='gv',["$$"]='qv',["$$$"]='sv'}
@@ -672,7 +675,7 @@ function prefixexpr(tkns,r)
   if t.type == 't_dot' then
     tkns.next()
     local n = tkns.matcht('t_name',"Expected name after '.'")
-    return prefixexpr(tkns,{type='aref',tab=r,idx=n.value,_dbg=n.dbg})
+    return prefixexpr(tkns,{type='aref',tab=r,idx=n.value,_dbg=t.dbg})
   elseif t.type == 't_lbra' then
     tkns.next()
     local e = expr(tkns,braEnd)
@@ -792,7 +795,7 @@ local function foldConst(op,a,b)
     --if op == 'sub' then op,b.value = 'sub',-b.value end
     return {type='unop',op=op,b=b.value,exp=a,_dbg=a._dbg}
   end
-  return {type='binop',op=op,exp1=a,exp2=b,_dbg=b._dbg}
+  return {type='binop',op=op,exp1=a,exp2=b,_dbg=mergeDbg(a,b)}
 end
 
 local simpBinops = mapT{'and','or'}

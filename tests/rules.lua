@@ -32,6 +32,7 @@ function QuickApp:main(er)
   
   var.HT = {
     remote = loadDevice("remoteController"),
+    fake = 5675675,
     kitchen = {
       light = {
         roof = loadDevice("binarySwitch"),
@@ -138,6 +139,8 @@ function QuickApp:main(er)
   var.kitchen = { lamp = FakeLamp(89, 77) }
   var.bedroom = { lamp =  FakeLamp(99, 30) }
   
+  rule("#device{id=HT.fake,a='$a'} => log('ok %s',a)")
+  rule("post(#device{id=HT.fake,a=77,property='scene'})")
   -- rule("earthLight = {kitchen.lamp, bedroom.lamp}")
   -- rule("log('Earth light IDs: %s',json.encodeFast(earthLight))")
   -- rule("earthLight:on")
@@ -186,27 +189,6 @@ function QuickApp:main(er)
   -- triggerVar.x5 = false 
   -- rule("trueFor(00:00:08, test.SWITCH:isOn) => log('xx is true for 5 sec')")
   -- rule("test.SWITCH:on; wait(00:00:07); test.SWITCH:off")
-
-   fibaro.EventRunner.debugFlags.sourceTrigger = true
-  var.keuken = { deur = loadDevice("doorSensor"), pir = loadDevice("motionSensor") }
-  var.appPhone = { beveiligen_Appartement = loadDevice("binarySwitch") }
-
-  print("WAIT")
-  setTimeout(function()
-    print("START")
-  rule("global('Verl_Instelling_Dagdeel')")
-
-rule([[ log('Rule started %s %s %s',$Verl_Instelling_Dagdeel,appPhone.beveiligen_Appartement:isOn,keuken.deur:isOpen) &
-      (06:07:30..10:15 & appPhone.beveiligen_Appartement:isOn & 
-$Verl_Instelling_Dagdeel == 'Slapen' & (keuken.deur:isOpen | keuken.pir:breached)) =>
-    log('Wakker worden!');
-wait(0)]])
-  
-  rule("$Verl_Instelling_Dagdeel='Slapen'") -- set global
-  end,2000)
-
-  fibaro.call(var.keuken.deur,"breached",true) -- open doorSensor
-  fibaro.call(var.appPhone.beveiligen_Appartement,"turnOn") -- app switch
 
 end
 

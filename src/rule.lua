@@ -39,6 +39,7 @@ local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
 local function timeStr(t) 
   if t < T2020 then return fmt("%02d:%02d:%02d",t//3600,t%3600//60,t%60) else return os.date("%Y-%m-%d %H:%M:%S",t) end
 end
+ER.T2020 = T2020
 
 local function mkEvent(ev) return setmetatable(ev, ER.EventMT) end
 
@@ -245,7 +246,9 @@ local function createRule(expr, data, opts)
     local env = table.copyShallow(self.env)
     env.trigger = event or {type='_startRule'}
     env.eventId = id
-    env.locals = {env = {event = event, p = matchvars}}
+    matchvars = matchvars or {}
+    matchvars.env = {event = event, p = matchvars}
+    env.locals = matchvars
     if opts.started then opts.started(self,env,event) end
     expr(opts.cont,env)
     if event and event._df then self:setupDaily(false) end
@@ -367,7 +370,24 @@ function findTriggers(c, cont, env, df)
     cont()
   elseif typ == 'table' then
     local args = {}
-    for _,v in ipairs(eargs(c)) do args[#args+1] = v.value end
+    for _,v in ipairs(eargs(c)) do 
+      args[#args+1] = v.value 
+    end
+    if next(args) then
+      c(function(tab) 
+        if type(tab)=='table' and type(tab.type)=='string' then
+          evid = evid+1
+          local eventId = "EV:"..evid
+          c.evalHook = function(c,cont,env) 
+            if not env.trigger then cont(false)
+            elseif env.trigger.type == '_startRule' then cont(true)
+            elseif env.eventId ~= eventId then return cont(false) else
+              cont(true) end
+            end
+            env.triggers[eventId]=Event(tab)
+          end
+        end, env)
+      end
     scanArg(cont, env, df, table.unpack(args))
   elseif typ == 'binop' then
     local op,a1,a2 = earg(c,1), earg(c,2), earg(c,3) -- ToDo: Add 1 to a2
