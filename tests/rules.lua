@@ -31,12 +31,12 @@ function QuickApp:main(er)
   end
   
   var.HT = {
-    remote = loadDevice("remoteController"),
+   -- remote = loadDevice("remoteController"),
     fake = 5675675,
     kitchen = {
       light = {
-        roof = loadDevice("binarySwitch"),
-        window =  loadDevice("multilevelSwitch"),
+        -- roof = loadDevice("binarySwitch"),
+        -- window =  loadDevice("multilevelSwitch"),
       }
     }
   }
@@ -139,8 +139,6 @@ function QuickApp:main(er)
   var.kitchen = { lamp = FakeLamp(89, 77) }
   var.bedroom = { lamp =  FakeLamp(99, 30) }
   
-  rule("#device{id=HT.fake,a='$a'} => log('ok %s',a)")
-  rule("post(#device{id=HT.fake,a=77,property='scene'})")
   -- rule("earthLight = {kitchen.lamp, bedroom.lamp}")
   -- rule("log('Earth light IDs: %s',json.encodeFast(earthLight))")
   -- rule("earthLight:on")
@@ -169,7 +167,9 @@ function QuickApp:main(er)
   --   for id,val in pairs(state) do id:value=val end
   -- ]])
   
-  shs = { getanswer = function(cb, query, speaker) print(cb,query,speaker) end }
+  rule("noderedURL='http://192.168.1.248:1880/endpoint/ER_HC3'")
+  rule("nr.post(#echo1)")
+  rule("#echo => log('Echo event received: %s',77)")
   
   --var.test = {SWITCH = var.HT.kitchen.light.roof }
   -- rule("AI_speakers = '192.168.1.239'")
