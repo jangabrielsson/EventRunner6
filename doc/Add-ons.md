@@ -19,6 +19,7 @@ Additional functions and utilities to extend EventRunner 6 functionality.
   - [HTTP \& Network](#http--network)
     - [Synchronous HTTP calls](#synchronous-http-calls)
     - [Synchronous HC3 HTTP calls](#synchronous-hc3-http-calls)
+    - [Node-RED integration](#node-red-integration)
   - [Debugging \& Logging](#debugging--logging)
   - [Module System](#module-system)
     - [Enhanced Module System](#enhanced-module-system)
@@ -259,7 +260,8 @@ end
     var.hc3api = api2
     var._hc3api = hc3api
 ```
-### Node-red integration
+
+### Node-RED integration
 
 ```lua
 
