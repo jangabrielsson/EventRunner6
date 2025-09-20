@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.0.41] - 2025-09-20
+
+## Changes in v0.0.41
+
+- 🐛 **Fix**: correct time calculation in customDefs function
+- ♻️ **Refactor**: update rules for better clarity and organization
+- 📚 **Docs**: add Node-RED integration section to documentation
+- ✨ **Feature**: efactor: clean up custom definitions and related functions
+- ✨ **Feature**: update interpreter path in launch configuration
+- ♻️ **Refactor**: comment out unused device loading in rules
+- ♻️ **Refactor**: simplify rule definitions for NodeRed integration
+- ✨ **Feature**: add release notes for v0.0.40
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.40] - 2025-09-16
 
 ## Changes in v0.0.40

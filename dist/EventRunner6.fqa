@@ -1,4 +1,942 @@
-{"type":"com.fibaro.genericDevice","name":"EventRunner6","apiVersion":"1.3","files":[{"type":"lua","name":"utils","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
+{"type":"com.fibaro.genericDevice","name":"EventRunner6","apiVersion":"1.3","files":[{"type":"lua","name":"rule","content":"local VERSION = \"0.0.41\"
+
+fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
+local ER = fibaro.EventRunner
+local debugFlags = ER.debugFlags
+local sourceTrigger
+
+local fmt  = string.format
+local function printf(...) print(string.format(...)) end
+local findTriggers, evalArg
+local Rules,RuleEnv = {},{}
+ER.ruleEnv = RuleEnv
+local catch = math.huge
+local idFun = function() end
+ER.rules = Rules
+
+local function safeFmt(fm,...) if #{...}==0 then return fm else return fmt(fm,...) end end
+local function Event(ev) return setmetatable(ev, ER.EventMT) end
+local function INFO(...) fibaro.debug(__TAG,safeFmt(...)) end
+local function ERROR(...) fibaro.error(__TAG,safeFmt(...)) end
+local function WARNING(...) fibaro.warning(__TAG,safeFmt(...)) end
+
+local dfltPrefix = {
+  warningPrefix = \"⚠️\",
+  ruleDefPrefix = \"✅\",
+  triggerListPrefix = \"⚡\",
+  dailyListPrefix = \"🕒\",
+  startPrefix = \"🎬\", 
+  stopPrefix = \"🛑\",
+  successPrefix = \"👍\", -- 😀
+  failPrefix = \"👎\", -- 🙁
+  resultPrefix = \"📋\", 
+  errorPrefix = \"❌\",
+  waitPrefix = \"💤\", -- 😴
+  waitedPrefix = \"⏰\", -- 🤗
+}
+
+local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
+local function timeStr(t) 
+  if t < T2020 then return fmt(\"%02d:%02d:%02d\",t//3600,t%3600//60,t%60) else return os.date(\"%Y-%m-%d %H:%M:%S\",t) end
+end
+ER.T2020 = T2020
+
+local function mkEvent(ev) return setmetatable(ev, ER.EventMT) end
+
+local RuleMT = {
+  __tostring = function(r) return fmt(\"[Rule:%d]\", r.id) end,
+}
+
+local function started_rule(rule, env, event) 
+  local str = tostring(event) 
+  INFO(\"%s %s: %s\", rule.startPrefix, rule, str) 
+end
+local function check_rule(rule, env, arg, ...) 
+  local str = tostring(rule)
+  if arg then INFO(\"%s %s\", rule.successPrefix, str) else INFO(\"%s %s\", rule.failPrefix, str) end
+end
+local function result_rule(rule, ...) 
+  local res = {ER.args2str(...)}
+  local rstr = #res>0 and table.concat(res,\", \") or \"<nil>\"
+  INFO(\"%s %s: %s\", rule.resultPrefix, rule, rstr)
+end
+local function waiting_rule(rule, env, time)
+  if time < T2020 then time= time + ER.now() end
+  INFO(\"%s %s: ⏰%s\", rule.waitPrefix, rule, timeStr(time))
+end
+local function waited_rule(rule, ...)
+  INFO(\"%s %s: awake\", rule.waitedPrefix, rule)
+end
+
+local function flatten(t)
+  if type(t) == 'table' then 
+    local r = {}
+    for _,v in ipairs(t) do
+      local v = flatten(v)
+      if type(v) == 'table' then
+        for _,w in ipairs(v) do r[#r+1] = w end
+      else
+        r[#r+1] = v
+      end
+    end
+    return r
+  else
+    return t
+  end
+end
+
+local ruleGetVar = { id = true, src = true }
+local ruleSetFun = { name = true, enable = true, disable = true, start = true }
+local function ruleWrapper(rule)
+  return setmetatable({_rule = rule},{
+    __tostring = function(r) return tostring(rule) end,
+    __index = function(r,k)
+      if ruleGetVar[k] then return (rule or {})[k] elseif ruleSetFun[k] then return function(...) if rule then rule[k](rule,...) end return r end end
+    end,
+  })
+end
+
+local function createRule(expr, data, opts)
+  local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src }
+  local timers = {}
+  local opts = opts or {}
+  opts = table.copyShallow(opts)
+  opts.env = RuleEnv
+
+  for k,v in pairs(dfltPrefix) do if opts[k] == nil then self[k] = v else self[k] = opts[k] end end
+  if opts.started and type(opts.started) == 'boolean' then opts.started = started_rule end
+  if opts.check and type(opts.check) == 'boolean' then opts.check = check_rule end
+  if opts.result and type(opts.result) == 'boolean' then opts.result = result_rule end
+  if opts.waiting and type(opts.waiting) == 'boolean' then opts.waiting = waiting_rule end
+  if opts.waited and type(opts.waited) == 'boolean' then opts.waited = waited_rule end
+
+  local function rsetTimeout(f,t)
+    local ref
+    local function fun(...) 
+      local res = {pcall(f,...)} 
+      timers[ref] = nil
+      return table.unpack(res)
+    end
+    ref = setTimeout(fun,t)
+    timers[ref] = true
+    return ref
+  end
+  local function rclearTimeout(ref) if timers[ref] then clearTimeout(ref) timers[ref] = nil end end
+  local function hook(ref) timers[ref] = nil end -- When posts are posted.
+  local function rpost(event,time) local ref = sourceTrigger:post(event,time,nil,hook) timers[ref] = true; return ref end
+  opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
+
+  opts.cont = function(...) if opts.result then opts.result(self,...) end end
+  opts.err = opts.err or function(str,warning) 
+    if warning then end
+    local msg = fmt(\"%s: %s (disabling)\", self, str) 
+    ERROR(msg)
+    ER.sourceTrigger:post({type='rule-error',rule=self,message=msg},0)
+    self:disable()
+  end
+  self.env = ER.createEnv(opts.cont,opts.err,opts)
+  self.env.check = opts.check
+  self.env.waiting = opts.waiting
+  self.env.waited = opts.waited
+  self.env.rule = self
+
+  local dailyEvent = mkEvent({ type = 'Daily', id = self.id })
+  local intervalEvent = mkEvent({ type = 'Interval', id = self.id })
+  
+  local skipTrigger = false
+  if self.daily and next(self.daily)~=nil then
+    sourceTrigger:subscribe(dailyEvent,function(event) 
+      self:start(event.event) 
+    end)
+    skipTrigger = data.seenDaily
+  end
+  
+  if self.interval then
+    sourceTrigger:subscribe(intervalEvent,function(event) 
+      self:start(event.event)
+    end)
+    skipTrigger = true
+  end
+  
+  for evid,t in pairs(self.triggers) do
+    if t.type ~= 'Daily' and t.type ~= 'Interval' then
+      if not skipTrigger then
+        local eventId = evid
+        sourceTrigger:subscribe(t,function(event)
+          self:start(event.event,eventId,event.p)
+        end)
+      elseif t._df then
+        t._df = nil
+        sourceTrigger:subscribe(t,function(event)
+          self:setupDaily(false)
+        end)
+      end
+    end
+  end
+  
+  function self:dumpTriggers()
+    printf(\"Rule %d triggers:\",self.id)
+    for _,t in pairs(self.triggers) do print(fmt(\"⚡ %s\", json.encodeFast(t))) end
+    if self.daily then 
+      evalArg(function(values)
+        if type(values) ~= 'table' then values = {values} else values = flatten(values) end
+        for i,t in ipairs(values) do 
+          if t ~= catch then printf(\"🕒 %s\",timeStr(t)) end
+        end
+      end, self.env, table.unpack(self.daily))
+    end
+  end
+  
+  if opts.triggers then self:dumpTriggers() end
+
+  local dailyTimers = {}
+  local function clearDailyTimers() for t,_ in ipairs(dailyTimers) do rclearTimeout(t) end; dailyTimers = {} end
+
+  function self:setupDaily(start,skew)
+    local skew = skew or 0
+    clearDailyTimers()
+    if self.daily then
+      evalArg(function(values)
+        local now = ER.now()
+        if type(values) ~= 'table' then values = {values} else values = flatten(values) end
+        if opts.log then INFO(\"Setting up daily trigger for rule %d at %s\", self.id, json.encodeFast(values)) end
+        local catchFlag,n = false,0
+        for _,t in ipairs(values) do n=n+1 if t == catch then catchFlag = true; break end end
+        for _,t in ipairs(values) do
+          if t ~= catch then
+            local torg = t
+            if type(t) ~= 'number' then return self.env.error(\"Invalid daily time: \"..tostring(t)) end
+            if t < now+skew then 
+              t = t + 24*3600
+              if catchFlag and start then rsetTimeout(function() self:start(dailyEvent) end,0) end -- Catch up, run immediately
+            end
+            dailyTimers[rpost({type='Daily',id=self.id,time=timeStr(torg)},t-now)]=true
+          end
+        end
+      end, self.env, table.unpack(self.daily))
+    end
+  end
+  
+  local intervalTimer
+  function self:setupInterval()
+    if intervalTimer then rclearTimeout(intervalTimer); intervalTimer = nil end
+    if self.interval then
+      self.interval(function(value)
+        if type(value) ~= 'number' then return self.env.error(\"Invalid interval time: \"..tostring(value)) end
+        local delay = 0
+        if value < 0 then value=-value delay = (os.time() // value + 1)*value - os.time() end
+        local nextTime = os.time() + delay
+        local function loop()
+          self:start(intervalEvent)
+          nextTime = nextTime + value
+          intervalTimer = rsetTimeout(loop, (nextTime-os.time())*1000)
+        end
+        intervalTimer = rsetTimeout(loop, (nextTime-os.time())*1000)
+      end, self.env)
+    end
+  end
+  
+  function self:clearTimers() for t,_ in pairs(timers) do rclearTimeout(t) end; timers = {} end
+
+  function self:enable() self.disabled = nil; self:setupDaily(false) self:setupInterval() end
+  function self:disable() self.disabled = true; self:clearTimers()end
+
+  function self:start(event,id,matchvars)
+    if self.disabled then return end
+    local env = table.copyShallow(self.env)
+    env.trigger = event or {type='_startRule'}
+    env.eventId = id
+    matchvars = matchvars or {}
+    matchvars.env = {event = event, p = matchvars}
+    env.locals = matchvars
+    if opts.started then opts.started(self,env,event) end
+    expr(opts.cont,env)
+    if event and event._df then self:setupDaily(false) end
+  end
+
+  setmetatable(self, RuleMT)
+  self.short = fmt(\"%s %s\",self,self.src // 80):gsub(\"%s*\\n%s*\",\" \")
+  return ruleWrapper(self)
+end
+
+local function defRule(expr, opts)
+  local head = expr.__doc[2]
+  local src = opts.src
+  local id = #Rules+1
+  local env = ER.createEnv(idFun,idFun,opts)
+  for k,v in pairs({
+    id = id,
+    triggers = {},
+    daily = nil,
+    interval = nil,
+    error = function(str) ERROR(\"❌ Rule %s: %s '%s'\", tostring(id), tostring(str), src:gsub(\"%s*\\n%s*\",\" \") // 80) os.exit() end, -- Only used when checking triggers
+  }) do env[k] = v end
+  
+  local function cont()
+    --triggers = env.triggers
+  end
+
+  findTriggers(head, cont, env)
+
+  if env.interval and env.seenDaily then return env.error(\"Only one @daily or @@interval per rule\") end
+  if env.daily then env.triggers[\"D\"]=Event({type='Daily',id=env.id}) end
+  
+  if env.interval == nil and env.daily == nil and next(env.triggers)==nil then
+    return env.error(\"Rule has no triggers\")
+  end
+
+  local rule = createRule(expr, env, opts)
+  rule._rule:setupDaily(true)
+  rule._rule:setupInterval()
+  Rules[#Rules+1] = rule._rule
+  printf(\"%s %s\",rule._rule.ruleDefPrefix,rule._rule.short)
+  return rule
+end
+
+local function etype(c) return c.__doc[1] end
+local function earg(c,i) return c.__doc[1+i] end
+local function eargs(c) return table.unpack(c.__doc,2) end
+
+local function scanArg(cont, env, df, arg, ...)
+  local rest = {...}
+  findTriggers(arg,function() 
+    if #rest > 0 then scanArg(cont, env, df, table.unpack(rest)) else cont() end
+  end, env, df)
+end
+
+local function evalArgAux(vals, cont, env, arg, ...)
+  local rest = {...}
+  arg(function(...) 
+    for _,v in ipairs({...}) do vals[#vals+1] = v end
+    if #rest > 0 then evalArgAux(vals, cont, env, table.unpack(rest)) else cont(vals) end
+  end, env)
+end
+function evalArg(cont, env, ...) evalArgAux({}, cont, env, ...) end
+
+local evid = 0
+function findTriggers(c, cont, env, df)
+  if c == nil then
+    return
+  end
+  local typ = etype(c)
+  if typ == 'unop' then
+    local op,arg,df = earg(c,1), earg(c,2),nil
+    if op == 'daily' then
+      if env.seenDaily then env.error(\"Only one @daily per rule\") end
+      env.seenDaily = true
+      env.daily = env.daily or {}
+      table.insert(env.daily,arg) 
+      df = true
+    elseif op == 'interv' then
+      if env.interval then env.error(\"Only one @interv per rule\") end
+      env.triggers[\"I\"]=Event({type='Interval',id=env.id})
+      env.interval = arg 
+    end
+    scanArg(cont, env, df, arg)
+  elseif typ == 'and' or typ == 'or' then 
+    scanArg(cont, env, df, table.unpack(eargs(c)))
+  elseif typ == 'getprop' then
+    local obj = earg(c,2)
+    local prop = earg(c,1)
+    if ER.propFilters[prop] then 
+      return scanArg(cont, env, df, obj)
+    end
+    obj(function(values)
+      if not(type(values) == 'table' and not values._isPropObject) then values = {values} end
+      for _,o in ipairs(values) do
+        local obj = ER.resolvePropObject(o)
+        if not obj:isProp(prop) then
+          env.error(fmt(\"Unknown property in getprop trigger: %s %s\",prop,tostring(obj)))
+        end
+        if not obj:isTrigger(prop) then return cont() end
+        local tr = obj:getTrigger(o,prop)
+        env.triggers[\"DEV:\"..tostring(o)..prop]=Event(tr)
+      end
+      cont()
+    end,env)
+  elseif typ == 'const' then
+    local t = earg(c,1)
+    if type(t) == 'table' and type(t.type) == 'string' then
+      evid = evid+1
+      local eventId = \"EV:\"..evid
+      c.evalHook = function(c,cont,env) 
+        if not env.trigger then cont(false)
+        elseif env.trigger.type == '_startRule' then cont(true)
+        elseif env.eventId ~= eventId then return cont(false) else
+        cont(true) end
+      end
+      env.triggers[eventId]=Event(t)
+    end
+    cont()
+  elseif typ == 'table' then
+    local args = {}
+    for _,v in ipairs(eargs(c)) do 
+      args[#args+1] = v.value 
+    end
+    if next(args) then
+      c(function(tab) 
+        if type(tab)=='table' and type(tab.type)=='string' then
+          evid = evid+1
+          local eventId = \"EV:\"..evid
+          c.evalHook = function(c,cont,env) 
+            if not env.trigger then cont(false)
+            elseif env.trigger.type == '_startRule' then cont(true)
+            elseif env.eventId ~= eventId then return cont(false) else
+              cont(true) end
+            end
+            env.triggers[eventId]=Event(tab)
+          end
+        end, env)
+      end
+    scanArg(cont, env, df, table.unpack(args))
+  elseif typ == 'binop' then
+    local op,a1,a2 = earg(c,1), earg(c,2), earg(c,3) -- ToDo: Add 1 to a2
+    a2 = ER.COMPFUNS.UNOP('add',a2,1)
+    if op == 'betw' then
+      if env.daily == nil then env.daily = {a1,a2}
+      else 
+        for _,v in ipairs({a1,a2}) do table.insert(env.daily,v) end
+      end
+    end
+    scanArg(cont, env ,df, a1, a2)
+  elseif typ == 'rulecheck' then
+    scanArg(cont, env, df, earg(c,1))
+  elseif typ == 'call' then
+    local args = earg(c,2)
+    if #args > 0 then
+      scanArg(cont, env, df, table.unpack(args)) -- fun, args
+    else cont() end
+  elseif typ == 'var' then
+    local name = earg(c,1)
+    if ER.triggerVars[name] then
+      env.triggers['TV:'..name]=Event({type='trigger-variable',name=name, _df=df})
+    end
+    cont()
+  elseif typ == 'gvar' then
+    local name = earg(c,1)
+    env.triggers['GV:'..name]=Event({type='global-variable',name=name, _df=df})
+    cont()
+  elseif typ == 'qvar' then
+    local name = earg(c,1)
+    env.triggers['QV:'..name]=Event({type='quickvar',id=quickApp.id,name=name, _df=df})
+    cont()
+  elseif typ == 'aref' then
+    scanArg(cont, env, df, eargs(c))
+  else
+    print(\"Unsupported trigger type:\", etype(c), json.encodeFast(c))
+  end
+end
+
+ER.defRule = defRule
+ER.computedVar = {}
+
+local function setupVariables(er)
+  local var = er.variables
+  var.sunrise, var.sunset,var.dawn,var.dusk = ER.sunCalc()
+  var.midnight, var.vnum = ER.midnight(), tonumber(os.date(\"%V\"))
+end
+
+local _er
+
+local function midnightLoop(er)
+  local dt,var = os.date(\"*t\"), er.variables
+  local midnight = os.time{year=dt.year, month=dt.month, day=dt.day+1, hour=0, min=0, sec=0}
+  local function loop()
+   setupVariables(er)
+    for _,r in pairs(Rules) do
+      if r.daily then r:setupDaily(false) end
+      r.once = nil -- clear once flag every midnight
+    end
+    local dt = os.date(\"*t\")
+    local midnight = os.time{year=dt.year, month=dt.month, day=dt.day+1, hour=0, min=0, sec=0}
+   setTimeout(loop, (midnight-os.time())*1000)
+  end
+  setTimeout(loop, (midnight-os.time())*1000)
+end
+
+function createER(qa)
+  quickApp = qa
+  if _er then return _er end
+  _er = { qa = qa }
+  ER._er = _er
+  sourceTrigger = SourceTrigger()
+  sourceTrigger:run()
+  ER.sourceTrigger = sourceTrigger
+  
+  local env = {catch = catch}
+  for k,v in pairs(env) do RuleEnv[k] = {v} end
+  for k,v in pairs(ER.builtin) do RuleEnv[k] = {v} end
+
+  local async = setmetatable({},{
+    __index = function(t,k) local v = RuleEnv[k] return v and v[1] or nil end,
+    __newindex = function(t,k,f) local var = RuleEnv[k] if var then var[1] = ER.ASYNCFUN(f) else RuleEnv[k] = {ER.ASYNCFUN(f)} end end,
+  })
+
+  _er.variables = setmetatable({ async = async },{
+    __index = function(t,k) local v = RuleEnv[k] return v and v[1] or nil end,
+    __newindex = function(t,k,v) 
+      local var = RuleEnv[k] 
+      if var then
+        if var[1] ~= v then 
+          if ER.triggerVars[k] then 
+            ER.sourceTrigger:post({type='trigger-variable',name=k},0) 
+          end
+        end
+        var[1] = v 
+      else RuleEnv[k] = {v} end 
+    end,
+  })
+
+  ER.triggerVars = {}
+  _er.triggerVariables = setmetatable({},{ 
+    __index = function(t,k) return  _er.variables[k] end,
+    __newindex = function(t,k,v) ER.triggerVars[k]=true _er.variables[k] = v end
+  })
+  function _er.rule(str,opts)
+    opts = opts or {}
+    for k,v in pairs(_er.opts or {}) do if opts[k] == nil then opts[k] = v end end 
+    opts.env = opts.env or RuleEnv
+    return ER.eval(str,opts)() 
+  end
+  function _er.start() 
+    setTimeout(function()
+      setupVariables(_er)
+      midnightLoop(_er)
+      ER.customDefs(_er)
+      print(\"=========== Loading rules ================\")
+      local t0 = os.clock()
+      local stat,err = pcall(function() _er.qa:main(_er) end)
+      if not stat then fibaro.error(__TAG,err) end
+      printf(\"=========== Load time: %.3fs ============\",os.clock()-t0)
+    end,1)
+  end
+  _er.definePropClass = ER.definePropClass
+  function _er.speed(time) return ER.speedTime(time,_er.start) end
+  function _er.post(event,time) return sourceTrigger:post(event,time) end
+  function _er.cancel(ref) return sourceTrigger:cancel(ref) end
+  function _er.postRemote(id,event) sourceTrigger:postRemote(id,event) end
+  _er.loadSimDevice = ER.loadSimDev
+  _er.createAsyncFun = ER.ASYNCFUN
+  _er.base64encode = ER.base64encode
+  _er.eval = _er.rule -- alias
+  setmetatable(_er,{
+    __tostring = function() return fmt(\"EventRunner6 v%s\",VERSION) end,
+  })
+  return _er
+end
+
+setmetatable(ER,{
+  __tostring = function() return fmt(\"EventRunner6 v%s\",VERSION) end,
+  __call = function(_,qa) return createER(qa) end
+})
+
+function fibaro.loadLibrary(lf) lf(fibaro.EventRunner._er) end ","isMain":false,"isOpen":false},{"type":"lua","name":"main","content":"--%%name:EventRunner6
+--%%headers:src/include.txt
+--%%u:{label='info', text='EventRunnner 6'}
+--%%save:dist/EventRunner6.fqa
+--%%offline:true
+
+function QuickApp:main(er)
+  local rule,var = er.rule,er.variables
+  er.opts = { started = true, check = true, result = false, triggers=true}
+  
+  var.HT = {
+    kitchen = {
+      light = { roof = 66, window =  67, },
+      sensor = { roof = 68, },
+    },
+  }
+
+  rule(\"HT.kitchen.sensor.roof:breached => log('Roof sensor breached!'); HT.kitchen.light.roof:on\")
+  rule(\"@@00:00:05 => log('Ding!')\")
+end
+
+function QuickApp:onInit()
+  local er = fibaro.EventRunner(self)
+  self:debug(er) 
+  self:updateView('info','text',tostring(er))
+  er.start()
+end","isMain":true,"isOpen":false},{"type":"lua","name":"sim","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
+local ER = fibaro.EventRunner
+local debugFlags = ER.debugFlags
+
+local speed = {}
+local timeOffset = os.time() 
+local fibdebug = fibaro.debug
+function speed.debug(tag,...) 
+  fibdebug(tag,os.date(\"%Y-%m-%d %H:%M:%S\",speed.userTime()),...) 
+end
+local _setTimeout,_clearTimeout,_setInterval,_clearInterval = setTimeout,clearTimeout,setInterval,clearInterval
+local _time,_date = os.time,os.date
+
+local orgTime,orgDate,timeOffset = os.time,os.date,0
+
+local function round(x) return math.floor(x+0.5) end
+function speed.userTime(a) 
+  return a == nil and round(_time() + timeOffset) or _time(a) 
+end
+local function userMilli() return _time() + timeOffset end
+function speed.userDate(a, b) 
+  return b == nil and orgDate(a, speed.userTime()) or _date(a, round(b)) 
+end
+
+local function getTimeOffset() return timeOffset end
+local function setTimeOffset(offs) timeOffset = offs end
+
+local function createQueue()
+  local self = {}
+  local times = nil -- linked list of sorted timers
+  
+  function self:add(t,fun,id)
+    local v = nil
+    v = {time=t,fun=fun,id=id}
+    if not times then times = v return v end
+    if t < times.time then
+      times.prev = v
+      v.next = times
+      times = v
+      return v
+    end
+    local p = times
+    while p.next and p.next.time < t do p = p.next end
+    v.next = p.next
+    if p.next then p.next.prev = v end
+    p.next = v
+    v.prev = p
+    return v
+  end
+  
+  function self:remove(v)
+    if v and not v.dead then
+      v.dead = true
+      if v.prev == nil then
+        times = v.next
+        if times then times.prev = nil end
+      elseif v.next == nil then
+        v.prev.next = nil
+      else
+        v.prev.next = v.next
+        v.next.prev = v.prev
+      end
+    end
+  end
+  
+  function self:pop() local t = times; if times then times.dead=true  times = times.next end return t end
+  function self:peek() return times end
+  return self
+end
+
+local timers = createQueue()
+local timerID = 0
+local timerIDs = {}
+
+function speed.setTimeout(fun,ms)
+  timerID = timerID + 1
+  local v = timers:add(speed.userTime()+ms/1000,fun,timerID)
+  timerIDs[timerID] = v
+  return timerID
+end
+
+function speed.clearTimeout(ref)
+  if timerIDs[ref] then
+    timers:remove(timerIDs[ref])
+    timerIDs[ref] = nil
+  end
+end
+
+local intervID = 0
+local intervIDs = {}
+
+function speed.setInterval(fun,ms)
+  local function loop()
+    if not intervIDs[intervID] then return end
+    fun()
+    if not intervIDs[intervID] then return end
+    intervIDs[intervID] = speed.setTimeout(loop,ms)
+  end
+  intervID = intervID + 1
+  intervIDs[intervID] = speed.setTimeout(loop,ms)
+  return intervID
+end
+
+function speed.clearInterval(ref)
+  if intervIDs[ref] then
+    speed.clearTimout(intervIDs[ref])
+    intervIDs[ref] = nil
+  end
+end
+
+local running = false
+function speed.loop()
+  if running then return end
+  running = true
+  while speed.userTime() <= speed.stopTime do
+    local t = timers:pop()
+    if not t then break end
+    local offs = t.time - _time()
+    setTimeOffset(offs)
+    --print(os.date(\"%Y-%m-%d %H:%M:%S\",speed.userTime()),\" Timer:\",t.id)
+    t.fun()
+  end
+end
+
+if fibaro.plua then
+  local id = 10000
+  local function createDevice(path)
+    local code = fibaro.plua.lib.readFile(path)
+    local d = fibaro.plua.lib.loadQAString(code,{headers={\"desktop:false\"}})
+    return d.device.id
+  end
+  ER.loadSimDev = createDevice
+end
+  
+function ER.speedTime(speedTime,fun)
+  speed.stopTime = os.time() + speedTime*3600
+  fibaro.debug = speed.debug
+  setTimeout = speed.setTimeout
+  clearTimeout = speed.clearTimeout
+  setInterval = speed.setInterval
+  clearInterval = speed.clearInterval
+  os.time = speed.userTime
+  os.date = speed.userDate
+  setTimeout(fun,0)
+  speed.loop()
+end","isMain":false,"isOpen":false},{"type":"lua","name":"builtin","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
+local ER = fibaro.EventRunner
+local debugFlags = ER.debugFlags
+local fmt = string.format
+
+local args = {}
+local builtin = {}
+ER.builtin = builtin
+
+local function detag(str) 
+  str = str:gsub(\"(#C:)(.-)(#)\",function(_,c) color=c return \"\" end)
+  if color then str=string.format(\"<font color='%s'>%s</font>\",color,str) end
+  return str
+end
+
+function builtin.log(...) -- printable tables and #C:color# tag
+  local args,n = {...},0
+  for i=1,#args do 
+    local a = args[i]
+    local typ = type(a)
+    n = n+1
+    if typ == 'string' then args[i] = detag(a)
+    elseif typ == 'table' or typ == 'userdata' then 
+      local mt = getmetatable(a)
+      if mt and mt.__tostring then args[i] = tostring(a)
+      else args[i] = json.encodeFast(a) end
+    end
+  end
+  local msg = \"\"
+  if n == 1 then msg = args[1] elseif n > 1 then msg = string.format(table.unpack(args)) end
+  print(msg)
+  return msg
+end
+
+function builtin.post(ev,time) return ER._er.post(ev,time) end
+function builtin.cancel(ref) return ER._er.cancel(ref) end
+function builtin.fmt(...) return string.format(...) end
+function builtin.HM(t) return os.date(\"%H:%M\",t < os.time()-8760*3600 and t+ER.midnight() or t) end
+function builtin.HMS(t) return os.date(\"%H:%M\",t < os.time()-8760*3600 and t+ER.midnight() or t) end
+function builtin.sign(t) return t < 0 and -1 or 1 end
+function builtin.rnd(min,max) return math.random(min,max)end
+function builtin.round(num) return math.floor(num+0.5) end
+function builtin.sum(...) 
+  local args = {...}
+  if #args == 1 and type(args[1]) == \"table\" then args = args[1] end
+  local s = 0 for i=1,#arg do s = s + arg[i] end
+  return s
+end
+function builtin.average(...) local s = builtin.sum(...) return s / select(\"#\", ...) end
+function builtin.size(t) return #t end
+function builtin.min(...) 
+  local args = {...}
+  if #args == 1 and type(args[1]) == \"table\" then args = args[1] end
+  return math.min(table.unpack(args))
+end
+function builtin.max(...) 
+  local args = {...}
+  if #args == 1 and type(args[1]) == \"table\" then args = args[1] end
+  return math.max(table.unpack(args))
+end
+function builtin.sort(t) table.sort(t) return t end
+function builtin.osdate(a,b) return os.date(a,b) end
+function builtin.ostime(t) return os.time(t) end
+
+function builtin.global(name)
+  local s = fibaro.getGlobalVariable(name)     
+  local a,b = api.post(\"/globalVariables/\",{name=name,value = \"\"})
+  return s == nil,(s == nil and fmt(\"'%s' created\",name) or fmt(\"'%s' exists\",name))
+end
+
+function builtin.listglobals() return api.get(\"/globalVariables\") end
+function builtin.deleteglobal(name) api.delete(\"/globalVariables/\"..name) end
+
+function builtin.subscribe(event) end
+function builtin.publish(event) end
+function builtin.remote(deviceId,event) end
+function builtin.adde(t,v) table.insert(t,v) return t end
+function builtin.remove(t,v) 
+  for i=#t,1,-1 do if t[i]==v then table.remove(t,i) end end 
+  return t
+end
+
+function builtin.enable(rule) end
+function builtin.disable(rule) end
+
+function ER.customDefs(er)
+    local rule,var = er.rule,er.variables
+
+    ER.computedVar.now = ER.now
+
+    function var.async.trueFor(cb,time,expr)
+    local trueFor = cb.env.rule.trueFor or {}
+    cb.env.rule.trueFor = trueFor
+    if expr then -- test is true
+      if not trueFor.ref then -- new, start timer
+        trueFor.trigger = cb.env.trigger
+        trueFor.ref = cb.env:setTimeout(function() trueFor.ref = nil; cb(true) end, time*1000)
+        return math.huge
+      else -- already true and we have timer waiting
+        cb(false) -- do nothing
+      end
+    elseif trueFor.ref then -- test is false, and we have timer
+      cb.env:clearTimeout(trueFor.ref)
+      trueFor.ref = nil
+      cb(false)
+    else
+      cb(false) -- do nothing
+    end
+    return -1 -- not async...
+  end
+
+  function var.async.again(cb,n)
+    local trueFor = cb.env.rule.trueFor
+    if trueFor then
+      if trueFor.again and trueFor.again == 0 then trueFor.again = nil return cb(0) end 
+      if trueFor.again == nil then trueFor.again,trueFor.againN = n,n end-- reset
+      trueFor.again = trueFor.again - 1
+      if trueFor.trigger and  trueFor.again > 0 then 
+        cb.env:setTimeout(function() cb.env.rule:start(trueFor.trigger) end, 0)
+        cb(trueFor.againN - trueFor.again)
+      else trueFor.again = nil cb(trueFor.againN) end
+    else cb(0) end
+    return -1 -- not async...
+  end
+
+  function var.async.once(cb,expr)
+    local once = cb.env.rule.once
+    if expr then
+      if not once then 
+        cb.env.rule.once = true
+        cb(true)
+      else cb(false) 
+      end
+    else  cb.env.rule.once = nil; cb(false) end
+    return -1 -- not async
+  end
+  
+  function var.async.wait(cb,time)
+    if time < ER.T2020 then time = time + ER.now() end
+    if cb.env.waiting then cb.env.waiting(cb.env.rule,cb.env,time) end
+    cb.env:setTimeout(function() 
+      if cb.env.waited then cb.env.waited(cb.env.rule,cb.env,time) end
+      cb(true) 
+    end, 
+    (time-ER.now())*1000)
+    return -1 -- not async
+  end
+
+  local function makeDateFun(str,cache)
+    if cache[str] then return cache[str] end
+    local f = ER.dateTest(str)
+    cache[str] = f
+    return f
+  end
+  
+  local cache = { date={}, day = {}, month={}, wday={} }
+  var.date = function(s) return (cache.date[s] or makeDateFun(s,cache.date))() end               -- min,hour,days,month,wday
+  var.day = function(s) return (cache.day[s] or makeDateFun(\"* * \"..s,cache.day))() end          -- day('1-31'), day('1,3,5')
+  var.month = function(s) return (cache.month[s] or makeDateFun(\"* * * \"..s,cache.month))() end  -- month('jan-feb'), month('jan,mar,jun')
+  var.wday = function(s) return (cache.wday[s] or makeDateFun(\"* * * * \"..s,cache.wday))() end   -- wday('fri-sat'), wday('mon,tue,wed')
+  
+  var.S1 = {click = \"16\", double = \"14\", tripple = \"15\", hold = \"12\", release = \"13\"}
+  var.S2 = {click = \"26\", double = \"24\", tripple = \"25\", hold = \"22\", release = \"23\"}
+  
+  function var.nextDST()
+    local d0 = os.date(\"*t\")
+    local t0 = os.time({year=d0.year, month=d0.month, day=1, hour=0})
+    local h = d0.hour
+    repeat  t0 = t0 + 3600*24*30; d0 = os.date(\"*t\",t0) until d0.hour ~= h
+    t0 = t0 - 3600*24*30; d0 = os.date(\"*t\",t0)
+    repeat h = d0.hour; t0 = t0 + 3600*24; d0 = os.date(\"*t\",t0) until d0.hour ~= h
+    t0 = t0 - 3600*24; d0 = os.date(\"*t\",t0)
+    repeat h = d0.hour; t0 = t0 + 3600; d0 = os.date(\"*t\",t0) until d0.hour ~= (h+1) % 24
+    if d0.month > 7 then t0 = t0 + 3600 end
+    return t0
+  end
+  
+    -- Example of home made property object
+  Weather = {}
+  er.definePropClass(\"Weather\") -- Define custom weather object
+  function Weather:__init() PropObject.__init(self) end
+  function Weather.getProp.temp(prop,env) return api.get(\"/weather\").Temperature end
+  function Weather.getProp.humidity(prop,env) return  api.get(\"/weather\").Humidity end
+  function Weather.getProp.wind(prop,env) return  api.get(\"/weather\").Wind end
+  function Weather.getProp.condition(prop,env) return  api.get(\"/weather\").WeatherCondition end
+  function Weather.trigger.temp(prop) return {type='weather', property='Temperature'} end
+  function Weather.trigger.humidity(prop) return {type='weather', property='Humidity'} end
+  function Weather.trigger.wind(prop) return {type='weather', property='Wind'} end
+  function Weather.trigger.condition(prop) return {type='weather', property='WeatherCondition'} end
+  var.weather = Weather()
+  
+  ------- Patch fibaro.call to track manual switches -------------------------
+  local lastID,switchMap = {},{}
+  local oldFibaroCall = fibaro.call
+  function fibaro.call(id,action,...)
+    if ({turnOff=true,turnOn=true,on=true,toggle=true,off=true,setValue=true})[action] then lastID[id]={script=true,time=os.time()} end
+    if action=='setValue' and switchMap[id]==nil then
+      local actions = (__fibaro_get_device(id) or {}).actions or {}
+      switchMap[id] = actions.turnOff and not actions.setValue
+    end
+    if action=='setValue' and switchMap[id] then return oldFibaroCall(id,({...})[1] and 'turnOn' or 'turnOff') end
+    return oldFibaroCall(id,action,...)
+  end
+  
+  local function lastHandler(ev)
+    if ev.type=='device' and ev.property=='value' then
+      local last = lastID[ev.id]
+      local _,t = fibaro.get(ev.id,'value')
+      if not(last and last.script and t-last.time <= 2) then
+        lastID[ev.id]={script=false, time=t}
+      end
+    end
+  end
+  
+  ER.sourceTrigger.eventEngine.registerCallback(lastHandler)
+  
+  function QuickApp:lastManual(id)
+    local last = lastID[id]
+    if not last then return -1 end
+    return last.script and -1 or os.time()-last.time
+  end
+
+  local deviceFormatter = {}
+  function deviceFormatter.centralSceneEvent(ev) 
+    local val = ev.value or {}
+    return fmt(\"#key{id:%s,%s:%s}\", ev.id,val.keyId or \"*\", val.keyAttribute or \"*\")
+  end
+  function ER.eventFormatter.device(ev)
+    if deviceFormatter[ev.property] then return deviceFormatter[ev.property](ev) end
+    return false
+  end
+  
+end
+
+
+","isMain":false,"isOpen":false},{"type":"lua","name":"utils","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner
 local debugFlags = ER.debugFlags
 
@@ -844,1495 +1782,7 @@ ER.toTime = toTime
 ER.sunCalc = sunCalc
 ER.dateTest = dateTest
 ER.marshallFrom = marshallFrom
-ER.base64encode = base64encode","isMain":false,"isOpen":false},{"type":"lua","name":"rule","content":"local VERSION = \"0.0.40\"
-
-fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
-local ER = fibaro.EventRunner
-local debugFlags = ER.debugFlags
-local sourceTrigger
-
-local fmt  = string.format
-local function printf(...) print(string.format(...)) end
-local findTriggers, evalArg
-local Rules,RuleEnv = {},{}
-ER.ruleEnv = RuleEnv
-local catch = math.huge
-local idFun = function() end
-ER.rules = Rules
-
-local function safeFmt(fm,...) if #{...}==0 then return fm else return fmt(fm,...) end end
-local function Event(ev) return setmetatable(ev, ER.EventMT) end
-local function INFO(...) fibaro.debug(__TAG,safeFmt(...)) end
-local function ERROR(...) fibaro.error(__TAG,safeFmt(...)) end
-local function WARNING(...) fibaro.warning(__TAG,safeFmt(...)) end
-
-local dfltPrefix = {
-  warningPrefix = \"⚠️\",
-  ruleDefPrefix = \"✅\",
-  triggerListPrefix = \"⚡\",
-  dailyListPrefix = \"🕒\",
-  startPrefix = \"🎬\", 
-  stopPrefix = \"🛑\",
-  successPrefix = \"👍\", -- 😀
-  failPrefix = \"👎\", -- 🙁
-  resultPrefix = \"📋\", 
-  errorPrefix = \"❌\",
-  waitPrefix = \"💤\", -- 😴
-  waitedPrefix = \"⏰\", -- 🤗
-}
-
-local T2020 = os.time{year=2020, month=1, day=1, hour=0, min=0, sec=0}
-local function timeStr(t) 
-  if t < T2020 then return fmt(\"%02d:%02d:%02d\",t//3600,t%3600//60,t%60) else return os.date(\"%Y-%m-%d %H:%M:%S\",t) end
-end
-ER.T2020 = T2020
-
-local function mkEvent(ev) return setmetatable(ev, ER.EventMT) end
-
-local RuleMT = {
-  __tostring = function(r) return fmt(\"[Rule:%d]\", r.id) end,
-}
-
-local function started_rule(rule, env, event) 
-  local str = tostring(event) 
-  INFO(\"%s %s: %s\", rule.startPrefix, rule, str) 
-end
-local function check_rule(rule, env, arg, ...) 
-  local str = tostring(rule)
-  if arg then INFO(\"%s %s\", rule.successPrefix, str) else INFO(\"%s %s\", rule.failPrefix, str) end
-end
-local function result_rule(rule, ...) 
-  local res = {ER.args2str(...)}
-  local rstr = #res>0 and table.concat(res,\", \") or \"<nil>\"
-  INFO(\"%s %s: %s\", rule.resultPrefix, rule, rstr)
-end
-local function waiting_rule(rule, env, time)
-  if time < T2020 then time= time + ER.now() end
-  INFO(\"%s %s: ⏰%s\", rule.waitPrefix, rule, timeStr(time))
-end
-local function waited_rule(rule, ...)
-  INFO(\"%s %s: awake\", rule.waitedPrefix, rule)
-end
-
-local function flatten(t)
-  if type(t) == 'table' then 
-    local r = {}
-    for _,v in ipairs(t) do
-      local v = flatten(v)
-      if type(v) == 'table' then
-        for _,w in ipairs(v) do r[#r+1] = w end
-      else
-        r[#r+1] = v
-      end
-    end
-    return r
-  else
-    return t
-  end
-end
-
-local ruleGetVar = { id = true, src = true }
-local ruleSetFun = { name = true, enable = true, disable = true, start = true }
-local function ruleWrapper(rule)
-  return setmetatable({_rule = rule},{
-    __tostring = function(r) return tostring(rule) end,
-    __index = function(r,k)
-      if ruleGetVar[k] then return (rule or {})[k] elseif ruleSetFun[k] then return function(...) if rule then rule[k](rule,...) end return r end end
-    end,
-  })
-end
-
-local function createRule(expr, data, opts)
-  local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src }
-  local timers = {}
-  local opts = opts or {}
-  opts = table.copyShallow(opts)
-  opts.env = RuleEnv
-
-  for k,v in pairs(dfltPrefix) do if opts[k] == nil then self[k] = v else self[k] = opts[k] end end
-  if opts.started and type(opts.started) == 'boolean' then opts.started = started_rule end
-  if opts.check and type(opts.check) == 'boolean' then opts.check = check_rule end
-  if opts.result and type(opts.result) == 'boolean' then opts.result = result_rule end
-  if opts.waiting and type(opts.waiting) == 'boolean' then opts.waiting = waiting_rule end
-  if opts.waited and type(opts.waited) == 'boolean' then opts.waited = waited_rule end
-
-  local function rsetTimeout(f,t)
-    local ref
-    local function fun(...) 
-      local res = {pcall(f,...)} 
-      timers[ref] = nil
-      return table.unpack(res)
-    end
-    ref = setTimeout(fun,t)
-    timers[ref] = true
-    return ref
-  end
-  local function rclearTimeout(ref) if timers[ref] then clearTimeout(ref) timers[ref] = nil end end
-  local function hook(ref) timers[ref] = nil end -- When posts are posted.
-  local function rpost(event,time) local ref = sourceTrigger:post(event,time,nil,hook) timers[ref] = true; return ref end
-  opts.setTimeout,opts.clearTimeout = rsetTimeout, rclearTimeout 
-
-  opts.cont = function(...) if opts.result then opts.result(self,...) end end
-  opts.err = opts.err or function(str,warning) 
-    if warning then end
-    local msg = fmt(\"%s: %s (disabling)\", self, str) 
-    ERROR(msg)
-    ER.sourceTrigger:post({type='rule-error',rule=self,message=msg},0)
-    self:disable()
-  end
-  self.env = ER.createEnv(opts.cont,opts.err,opts)
-  self.env.check = opts.check
-  self.env.waiting = opts.waiting
-  self.env.waited = opts.waited
-  self.env.rule = self
-
-  local dailyEvent = mkEvent({ type = 'Daily', id = self.id })
-  local intervalEvent = mkEvent({ type = 'Interval', id = self.id })
-  
-  local skipTrigger = false
-  if self.daily and next(self.daily)~=nil then
-    sourceTrigger:subscribe(dailyEvent,function(event) 
-      self:start(event.event) 
-    end)
-    skipTrigger = data.seenDaily
-  end
-  
-  if self.interval then
-    sourceTrigger:subscribe(intervalEvent,function(event) 
-      self:start(event.event)
-    end)
-    skipTrigger = true
-  end
-  
-  for evid,t in pairs(self.triggers) do
-    if t.type ~= 'Daily' and t.type ~= 'Interval' then
-      if not skipTrigger then
-        local eventId = evid
-        sourceTrigger:subscribe(t,function(event)
-          self:start(event.event,eventId,event.p)
-        end)
-      elseif t._df then
-        t._df = nil
-        sourceTrigger:subscribe(t,function(event)
-          self:setupDaily(false)
-        end)
-      end
-    end
-  end
-  
-  function self:dumpTriggers()
-    printf(\"Rule %d triggers:\",self.id)
-    for _,t in pairs(self.triggers) do print(fmt(\"⚡ %s\", json.encodeFast(t))) end
-    if self.daily then 
-      evalArg(function(values)
-        if type(values) ~= 'table' then values = {values} else values = flatten(values) end
-        for i,t in ipairs(values) do 
-          if t ~= catch then printf(\"🕒 %s\",timeStr(t)) end
-        end
-      end, self.env, table.unpack(self.daily))
-    end
-  end
-  
-  if opts.triggers then self:dumpTriggers() end
-
-  local dailyTimers = {}
-  local function clearDailyTimers() for t,_ in ipairs(dailyTimers) do rclearTimeout(t) end; dailyTimers = {} end
-
-  function self:setupDaily(start,skew)
-    local skew = skew or 0
-    clearDailyTimers()
-    if self.daily then
-      evalArg(function(values)
-        local now = ER.now()
-        if type(values) ~= 'table' then values = {values} else values = flatten(values) end
-        if opts.log then INFO(\"Setting up daily trigger for rule %d at %s\", self.id, json.encodeFast(values)) end
-        local catchFlag,n = false,0
-        for _,t in ipairs(values) do n=n+1 if t == catch then catchFlag = true; break end end
-        for _,t in ipairs(values) do
-          if t ~= catch then
-            local torg = t
-            if type(t) ~= 'number' then return self.env.error(\"Invalid daily time: \"..tostring(t)) end
-            if t < now+skew then 
-              t = t + 24*3600
-              if catchFlag and start then rsetTimeout(function() self:start(dailyEvent) end,0) end -- Catch up, run immediately
-            end
-            dailyTimers[rpost({type='Daily',id=self.id,time=timeStr(torg)},t-now)]=true
-          end
-        end
-      end, self.env, table.unpack(self.daily))
-    end
-  end
-  
-  local intervalTimer
-  function self:setupInterval()
-    if intervalTimer then rclearTimeout(intervalTimer); intervalTimer = nil end
-    if self.interval then
-      self.interval(function(value)
-        if type(value) ~= 'number' then return self.env.error(\"Invalid interval time: \"..tostring(value)) end
-        local delay = 0
-        if value < 0 then value=-value delay = (os.time() // value + 1)*value - os.time() end
-        local nextTime = os.time() + delay
-        local function loop()
-          self:start(intervalEvent)
-          nextTime = nextTime + value
-          intervalTimer = rsetTimeout(loop, (nextTime-os.time())*1000)
-        end
-        intervalTimer = rsetTimeout(loop, (nextTime-os.time())*1000)
-      end, self.env)
-    end
-  end
-  
-  function self:clearTimers() for t,_ in pairs(timers) do rclearTimeout(t) end; timers = {} end
-
-  function self:enable() self.disabled = nil; self:setupDaily(false) self:setupInterval() end
-  function self:disable() self.disabled = true; self:clearTimers()end
-
-  function self:start(event,id,matchvars)
-    if self.disabled then return end
-    local env = table.copyShallow(self.env)
-    env.trigger = event or {type='_startRule'}
-    env.eventId = id
-    matchvars = matchvars or {}
-    matchvars.env = {event = event, p = matchvars}
-    env.locals = matchvars
-    if opts.started then opts.started(self,env,event) end
-    expr(opts.cont,env)
-    if event and event._df then self:setupDaily(false) end
-  end
-
-  setmetatable(self, RuleMT)
-  self.short = fmt(\"%s %s\",self,self.src // 80):gsub(\"%s*\\n%s*\",\" \")
-  return ruleWrapper(self)
-end
-
-local function defRule(expr, opts)
-  local head = expr.__doc[2]
-  local src = opts.src
-  local id = #Rules+1
-  local env = ER.createEnv(idFun,idFun,opts)
-  for k,v in pairs({
-    id = id,
-    triggers = {},
-    daily = nil,
-    interval = nil,
-    error = function(str) ERROR(\"❌ Rule %s: %s '%s'\", tostring(id), tostring(str), src:gsub(\"%s*\\n%s*\",\" \") // 80) os.exit() end, -- Only used when checking triggers
-  }) do env[k] = v end
-  
-  local function cont()
-    --triggers = env.triggers
-  end
-
-  findTriggers(head, cont, env)
-
-  if env.interval and env.seenDaily then return env.error(\"Only one @daily or @@interval per rule\") end
-  if env.daily then env.triggers[\"D\"]=Event({type='Daily',id=env.id}) end
-  
-  if env.interval == nil and env.daily == nil and next(env.triggers)==nil then
-    return env.error(\"Rule has no triggers\")
-  end
-
-  local rule = createRule(expr, env, opts)
-  rule._rule:setupDaily(true)
-  rule._rule:setupInterval()
-  Rules[#Rules+1] = rule._rule
-  printf(\"%s %s\",rule._rule.ruleDefPrefix,rule._rule.short)
-  return rule
-end
-
-local function etype(c) return c.__doc[1] end
-local function earg(c,i) return c.__doc[1+i] end
-local function eargs(c) return table.unpack(c.__doc,2) end
-
-local function scanArg(cont, env, df, arg, ...)
-  local rest = {...}
-  findTriggers(arg,function() 
-    if #rest > 0 then scanArg(cont, env, df, table.unpack(rest)) else cont() end
-  end, env, df)
-end
-
-local function evalArgAux(vals, cont, env, arg, ...)
-  local rest = {...}
-  arg(function(...) 
-    for _,v in ipairs({...}) do vals[#vals+1] = v end
-    if #rest > 0 then evalArgAux(vals, cont, env, table.unpack(rest)) else cont(vals) end
-  end, env)
-end
-function evalArg(cont, env, ...) evalArgAux({}, cont, env, ...) end
-
-local evid = 0
-function findTriggers(c, cont, env, df)
-  if c == nil then
-    return
-  end
-  local typ = etype(c)
-  if typ == 'unop' then
-    local op,arg,df = earg(c,1), earg(c,2),nil
-    if op == 'daily' then
-      if env.seenDaily then env.error(\"Only one @daily per rule\") end
-      env.seenDaily = true
-      env.daily = env.daily or {}
-      table.insert(env.daily,arg) 
-      df = true
-    elseif op == 'interv' then
-      if env.interval then env.error(\"Only one @interv per rule\") end
-      env.triggers[\"I\"]=Event({type='Interval',id=env.id})
-      env.interval = arg 
-    end
-    scanArg(cont, env, df, arg)
-  elseif typ == 'and' or typ == 'or' then 
-    scanArg(cont, env, df, table.unpack(eargs(c)))
-  elseif typ == 'getprop' then
-    local obj = earg(c,2)
-    local prop = earg(c,1)
-    if ER.propFilters[prop] then 
-      return scanArg(cont, env, df, obj)
-    end
-    obj(function(values)
-      if not(type(values) == 'table' and not values._isPropObject) then values = {values} end
-      for _,o in ipairs(values) do
-        local obj = ER.resolvePropObject(o)
-        if not obj:isProp(prop) then
-          env.error(fmt(\"Unknown property in getprop trigger: %s %s\",prop,tostring(obj)))
-        end
-        if not obj:isTrigger(prop) then return cont() end
-        local tr = obj:getTrigger(o,prop)
-        env.triggers[\"DEV:\"..tostring(o)..prop]=Event(tr)
-      end
-      cont()
-    end,env)
-  elseif typ == 'const' then
-    local t = earg(c,1)
-    if type(t) == 'table' and type(t.type) == 'string' then
-      evid = evid+1
-      local eventId = \"EV:\"..evid
-      c.evalHook = function(c,cont,env) 
-        if not env.trigger then cont(false)
-        elseif env.trigger.type == '_startRule' then cont(true)
-        elseif env.eventId ~= eventId then return cont(false) else
-        cont(true) end
-      end
-      env.triggers[eventId]=Event(t)
-    end
-    cont()
-  elseif typ == 'table' then
-    local args = {}
-    for _,v in ipairs(eargs(c)) do 
-      args[#args+1] = v.value 
-    end
-    if next(args) then
-      c(function(tab) 
-        if type(tab)=='table' and type(tab.type)=='string' then
-          evid = evid+1
-          local eventId = \"EV:\"..evid
-          c.evalHook = function(c,cont,env) 
-            if not env.trigger then cont(false)
-            elseif env.trigger.type == '_startRule' then cont(true)
-            elseif env.eventId ~= eventId then return cont(false) else
-              cont(true) end
-            end
-            env.triggers[eventId]=Event(tab)
-          end
-        end, env)
-      end
-    scanArg(cont, env, df, table.unpack(args))
-  elseif typ == 'binop' then
-    local op,a1,a2 = earg(c,1), earg(c,2), earg(c,3) -- ToDo: Add 1 to a2
-    a2 = ER.COMPFUNS.UNOP('add',a2,1)
-    if op == 'betw' then
-      if env.daily == nil then env.daily = {a1,a2}
-      else 
-        for _,v in ipairs({a1,a2}) do table.insert(env.daily,v) end
-      end
-    end
-    scanArg(cont, env ,df, a1, a2)
-  elseif typ == 'rulecheck' then
-    scanArg(cont, env, df, earg(c,1))
-  elseif typ == 'call' then
-    local args = earg(c,2)
-    if #args > 0 then
-      scanArg(cont, env, df, table.unpack(args)) -- fun, args
-    else cont() end
-  elseif typ == 'var' then
-    local name = earg(c,1)
-    if ER.triggerVars[name] then
-      env.triggers['TV:'..name]=Event({type='trigger-variable',name=name, _df=df})
-    end
-    cont()
-  elseif typ == 'gvar' then
-    local name = earg(c,1)
-    env.triggers['GV:'..name]=Event({type='global-variable',name=name, _df=df})
-    cont()
-  elseif typ == 'qvar' then
-    local name = earg(c,1)
-    env.triggers['QV:'..name]=Event({type='quickvar',id=quickApp.id,name=name, _df=df})
-    cont()
-  elseif typ == 'aref' then
-    scanArg(cont, env, df, eargs(c))
-  else
-    print(\"Unsupported trigger type:\", etype(c), json.encodeFast(c))
-  end
-end
-
-ER.defRule = defRule
-ER.computedVar = {}
-
-local function setupVariables(er)
-  local var = er.variables
-  var.sunrise, var.sunset,var.dawn,var.dusk = ER.sunCalc()
-  var.midnight, var.vnum = ER.midnight(), tonumber(os.date(\"%V\"))
-end
-
-local _er
-
-local function midnightLoop(er)
-  local dt,var = os.date(\"*t\"), er.variables
-  local midnight = os.time{year=dt.year, month=dt.month, day=dt.day+1, hour=0, min=0, sec=0}
-  local function loop()
-   setupVariables(er)
-    for _,r in pairs(Rules) do
-      if r.daily then r:setupDaily(false) end
-      r.once = nil -- clear once flag every midnight
-    end
-    local dt = os.date(\"*t\")
-    local midnight = os.time{year=dt.year, month=dt.month, day=dt.day+1, hour=0, min=0, sec=0}
-   setTimeout(loop, (midnight-os.time())*1000)
-  end
-  setTimeout(loop, (midnight-os.time())*1000)
-end
-
-function createER(qa)
-  quickApp = qa
-  if _er then return _er end
-  _er = { qa = qa }
-  ER._er = _er
-  sourceTrigger = SourceTrigger()
-  sourceTrigger:run()
-  ER.sourceTrigger = sourceTrigger
-  
-  local env = {catch = catch}
-  for k,v in pairs(env) do RuleEnv[k] = {v} end
-  for k,v in pairs(ER.builtin) do RuleEnv[k] = {v} end
-
-  local async = setmetatable({},{
-    __index = function(t,k) local v = RuleEnv[k] return v and v[1] or nil end,
-    __newindex = function(t,k,f) local var = RuleEnv[k] if var then var[1] = ER.ASYNCFUN(f) else RuleEnv[k] = {ER.ASYNCFUN(f)} end end,
-  })
-
-  _er.variables = setmetatable({ async = async },{
-    __index = function(t,k) local v = RuleEnv[k] return v and v[1] or nil end,
-    __newindex = function(t,k,v) 
-      local var = RuleEnv[k] 
-      if var then
-        if var[1] ~= v then 
-          if ER.triggerVars[k] then 
-            ER.sourceTrigger:post({type='trigger-variable',name=k},0) 
-          end
-        end
-        var[1] = v 
-      else RuleEnv[k] = {v} end 
-    end,
-  })
-
-  ER.triggerVars = {}
-  _er.triggerVariables = setmetatable({},{ 
-    __index = function(t,k) return  _er.variables[k] end,
-    __newindex = function(t,k,v) ER.triggerVars[k]=true _er.variables[k] = v end
-  })
-  function _er.rule(str,opts)
-    opts = opts or {}
-    for k,v in pairs(_er.opts or {}) do if opts[k] == nil then opts[k] = v end end 
-    opts.env = opts.env or RuleEnv
-    return ER.eval(str,opts)() 
-  end
-  function _er.start() 
-    setTimeout(function()
-      setupVariables(_er)
-      midnightLoop(_er)
-      ER.customDefs(_er)
-      print(\"=========== Loading rules ================\")
-      local t0 = os.clock()
-      local stat,err = pcall(function() _er.qa:main(_er) end)
-      if not stat then fibaro.error(__TAG,err) end
-      printf(\"=========== Load time: %.3fs ============\",os.clock()-t0)
-    end,1)
-  end
-  _er.definePropClass = ER.definePropClass
-  function _er.speed(time) return ER.speedTime(time,_er.start) end
-  function _er.post(event,time) return sourceTrigger:post(event,time) end
-  function _er.cancel(ref) return sourceTrigger:cancel(ref) end
-  function _er.postRemote(id,event) sourceTrigger:postRemote(id,event) end
-  _er.loadSimDevice = ER.loadSimDev
-  _er.createAsyncFun = ER.ASYNCFUN
-  _er.base64encode = ER.base64encode
-  _er.eval = _er.rule -- alias
-  setmetatable(_er,{
-    __tostring = function() return fmt(\"EventRunner6 v%s\",VERSION) end,
-  })
-  return _er
-end
-
-setmetatable(ER,{
-  __tostring = function() return fmt(\"EventRunner6 v%s\",VERSION) end,
-  __call = function(_,qa) return createER(qa) end
-})
-
-function fibaro.loadLibrary(lf) lf(fibaro.EventRunner._er) end ","isMain":false,"isOpen":false},{"type":"lua","name":"compiler","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
-local ER = fibaro.EventRunner
-local debugFlags = ER.debugFlags
-local isHead,currentSrc = false,\"\" 
-
-local fmt = string.format
-local function idfun() end
-
-local FUNCSTR = \"funct\"..\"ion\"
-
-local function docify(c)
-  if type(c) ~= 'table' then return c end
-  if c.__doc then 
-    return docify(c.__doc)
-  else
-    local r = {}
-    for k,v in pairs(c) do r[k] = docify(v) end
-    return r
-  end
-end
-
-local function CONTFUN(fun) 
-  return setmetatable({ __continuationFun =true },{
-    __call = function(t,...) return fun(...) end
-  })
-end
-
-local function CONT(cont,doc) 
-  return setmetatable({ __continuation = true, __doc = doc },{
-    __call = function(t,...) return cont(...) end,
-    __tostring = function(t) return (doc and json.encodeFast(docify(doc)) or \"\") end
-  })
-end
-
-local function isContFun(obj) return type(obj) == 'table' and obj.__continuationFun end
-local function isCont(obj) return type(obj) == 'table' and obj.__continuation end
-
-local function IF(test, t, f)
-  return CONT(function(cont,env)
-    test(function(res)
-      if res then
-        t(cont, env)
-      else
-        if f then f(cont, env) else cont(false) end
-      end
-    end, env)
-  end,{'if', test, t, f})
-end
-
-local function IFA(args)
-  return CONT(function(cont,env)
-    local function doTest(i)
-      if i > #args then
-        cont(true)
-        return
-      end
-      local test = args[i]
-      if not test.cond then test.body(cont, env)
-      else
-        test.cond(function(res)
-          if res then
-            test.body(cont, env)
-          else
-            doTest(i + 1)
-          end
-        end, env)
-      end
-      
-    end
-    doTest(1)
-  end,{'ifa',args})
-end
-
-local function AND(...)
-  local tests = {...}
-  return CONT(function(cont, env)
-    local function nextTest(index, res)
-      if index > #tests then
-        cont(res)
-      else
-        local test = tests[index]
-        if isCont(test) or type(test) == FUNCSTR then
-          test(function(res)
-            if res then
-              nextTest(index + 1, res)
-            else
-              cont(false)
-            end
-          end, env)
-        elseif test then 
-          nextTest(index + 1, test)
-        else
-          cont(test)
-        end
-      end
-    end
-    nextTest(1, false)
-  end,{'and',tests})
-end
-
-local function OR(...)
-  local tests = {...}
-  return CONT(function(cont, env)
-    local function nextTest(index, res)
-      if index > #tests then
-        cont(res)
-      else
-        local test = tests[index]
-        if isCont(test) or type(test) == FUNCSTR then
-          test(function(res)
-            if res then 
-              cont(res)
-            else
-              nextTest(index + 1, res)
-            end
-          end, env)
-        elseif test then 
-          cont(test) 
-        else
-          nextTest(index + 1, test)
-        end
-      end
-    end
-    nextTest(1, false)
-  end,{'or',tests})
-end
-
-local function WHILE(cond,body)
-  return CONT(function(cont, env)
-    local function loop()
-      cond(function(res)
-        if res then 
-          body(function() env:setTimeout(loop,0) end,env)
-        else
-          cont(true) -- Exit the loop
-        end
-      end, env)
-    end
-    loop()
-  end,{'while',cond,body})
-end
-
-local function REPEAT(cond,body)
-  return CONT(function(cont, env)
-    local function loop()
-      body(function()
-        cond(function(res)
-          if not res then env:setTimeout(loop, 0)
-          else cont(true) end
-        end, env)
-      end,env)
-    end
-    loop()
-  end,{'repeat',cond,body})
-end
-
-local function LOOP(body) -- loop forever - needs break/return
-  return CONT(function(cont, env)
-    local function loop()
-      body(function() env:setTimeout(loop,0) end, env)
-    end
-    loop()
-  end,{'loop',body})
-end
-
-local function FRAME(expr)
-  return CONT(function(cont, env)
-    local __cont = function(...) env:popEnv() cont(...) end
-    env:pushEnv({__cont = {__cont}})
-    expr(__cont, env)
-  end,{'frame',expr})
-end
-
---[[
-local function mfor(vars, expr, body)
-  local f,t,i = expr()
-  kn ,vn = vars[1],vars[2]
-  vars[kn] = i
-  while true do
-    vars[kn], vars[vn] = f(t,vars[kn])
-    if vars[kn] == nil then break end
-    body()
-  end
-end
---]]
-
-local function FORIN(vars,expr,body)
-  return FRAME(function(cont,env)
-    local kn,vn = table.unpack(vars)
-    env:pushVariable(kn,nil)
-    env:pushVariable(vn,nil)
-    expr(function(f,t,i)
-      local k,v = i,nil
-      local function loop()
-        k,v = f(t,k)
-        env:setVariable(kn,k)
-        env:setVariable(vn,v)
-        if not k then return cont(true) end
-        body(function() env:setTimeout(loop,0) end, env)
-      end
-      loop()
-    end,env)
-  end),{'forin',vars,expr,body}
-end
-
-local function evalArgs(args, cont, env)
-  if #args == 0 then
-    cont({})
-  else
-    local results = {}
-    local function nextArg(index)
-      local arg = args[index]
-      if type(arg) == FUNCSTR or isCont(arg) then
-        arg(function(arg1,...)
-          if index == #args then
-            results[index] = arg1
-            for _,a in ipairs({...}) do 
-              results[#results+1] = a
-            end
-            cont(results)
-          else
-            results[index] = arg1
-            nextArg(index + 1)
-          end
-        end, env)
-      else
-        results[index] = arg
-        nextArg(index + 1)
-      end
-    end
-
-    nextArg(1)
-  end
-end
-
-local function BREAK()
-  return CONT(function(cont, env)
-    local frameCont = env:getVariable('__cont')
-    env:setTimeout(function() frameCont(true) end, 0)
-  end, {'break'})
-end
-
-local function PROGN(...)
-  local statements = {...}
-  return CONT(function(cont,env)
-    evalArgs(statements, function(values)
-      local val = true
-      if #values > 0 then val = values[#statements] end
-      cont(val)
-    end,env)
-  end,{'progn',statements})
-end
-
-local function TABLE(args)
-  return CONT(function(cont, env)
-    local tbl = {}
-    local function nextVal(i)
-      if i > #args then
-        cont(tbl)
-      else
-        args[i].expr(function(key)
-          args[i].value(function(val)
-            tbl[key]=val
-            nextVal(i + 1)
-          end,env)
-        end,env)
-      end
-    end
-    nextVal(1)
-  end, {'table', args})
-end
-
-local function checkArgs(a,t1,b,t2,env,e1,e2)
-  if type(a) ~= t1 then env.error(fmt(\"%s: Expected %s, got: %s\",e1,t1,a))  end
-  if type(b) ~= t2 then env.error(fmt(\"%s: Expected %s, got: %s\",e2,t2,b))  end
-end
-
-local T2020 = os.time{year=2020, month=1, day=1, hour=0}
-local function coerce(a) if type(a) == 'table' then local mt=getmetatable(a) if mt and mt.__tostring then return mt.__tostring(a) end end return a end
-
-local opFuns = {
-  ['add'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 + arg2 end,
-  ['sub'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 - arg2 end,
-  ['mul'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 * arg2 end,
-  ['div'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 / arg2 end,
-  ['mod'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 % arg2 end,
-  ['pow'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 ^ arg2 end,
-  ['eq'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 == arg2 end,
-  ['neq'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 ~= arg2 end,
-  ['lt'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 < arg2 end,
-  ['lte'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 <= arg2 end,
-  ['gt'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 > arg2 end,
-  ['gte'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 >= arg2 end,
-  ['betw'] = function(arg1,arg2,env,e1,e2)
-    checkArgs(arg1,'number',arg2,'number',env,e1,e2)
-    if arg1 > T2020 then
-      local tn = os.time()
-      return arg1 <= tn and tn <= arg2
-    else
-      local ts = os.date(\"*t\")
-      local t = ts.hour*3600 + ts.min*60 + ts.sec
-      arg2 = arg2 >= arg1 and arg2 or arg2 + 24*3600
-      t = t >= arg1 and t or t + 24*3600
-      return arg1 <= t and t <= arg2
-    end
-  end,
-  ['nilco'] = function(arg1,arg2,env,e1,e2) if arg1 ~= nil then return arg1 else return arg2 end end,
-}
-
-local function BINOP(op,exp1,exp2)
-  return CONT(function(cont, env)
-    exp1(function(v1)
-      exp2(function(v2)
-        if opFuns[op] then
-          local stat,err = pcall(function()
-            local res = opFuns[op](v1, v2, env, exp1, exp2)
-            cont(res)
-          end)
-          if not stat then
-            env.error(fmt(\"%s: %s %s %s\",(err or \"\"):match(\"%d+:%s*(.*)\") or err, op, exp1, exp2))
-          end
-        else
-          env.error(\"Unknown operator: \" .. tostring(op))
-        end
-      end, env)
-    end, env)
-  end, {'binop', op, exp1, exp2})
-end
-
-local function checkArg1(a,t1,b,t2,env,e)
-  if type(a) ~= t1 then env.error(fmt(\"%s: Expected %s, got: %s\",e,t1,a))
-  elseif type(b) ~= t2 then env.error(fmt(\"%s: Expected %s, got: %s\",e,t2,b)) 
-  else return true end
-end
-
-local unOpFuns = {
-  plus = function(v,a,b,e,env) return ER.toTime(\"+/\"..v) end,
-  next = function(v,a,b,e,env) return ER.toTime(\"n/\"..v) end,
-  today = function(v,a,b,e,env) return ER.toTime(\"t/\"..v) end,
-  add = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return v+(a or b) end end,
-  neg = function(v,a,b,e,env) return - v end,
-  sub = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return a and a-v or v-b end end,
-  mul = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return v*(a or b) end end,
-  div = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return a and a/v or v/b  end end,
-  ['not'] = function(v,a,b,e,env) return not v  end,
-  daily = function(v,a,b,e,env)
-    local e = env.trigger
-    if not e then return env.error(\"No trigger in environment\") end
-    return e.type == 'Daily'  -- False if not a daily event triggering
-  end,
-  interv = function(v,a,b,e,env)
-    local e = env.trigger
-    if not e then return env.error(\"No trigger in environment\") end
-    return e.type == 'Interval'  -- False if not a daily event triggering
-  end,
-}
-
-
-local function UNOP(op, expr, v1, v2) --UNOP('add', expr, 1) end
-  return CONT(function(cont, env)
-    expr(function(val)
-      if unOpFuns[op] then
-        local res = unOpFuns[op](val,v1,v2,expr,env)
-        cont(res)
-      else
-        env.error(\"Unknown operator: \" .. tostring(op))
-      end
-    end, env)
-  end, {'unop', op, expr, v1, v2})
-end
-
-local function CONST(n) 
-  local c
-  c = CONT(function(cont,env) 
-    if c.evalHook then c.evalHook(c,cont,env)
-    else cont(n) end
-  end, {'const', n})
-  return c
-end
-
-local function CALL(fun,...)
-  local args = {...}
-  return CONT(function(cont,env) -- Return value out of expr
-    fun(function(fval)
-      local isCont = isContFun(fval)
-      if isCont or type(fval) == FUNCSTR then
-        evalArgs(args, function(exprs)
-          if isCont then -- continuation
-            fval(cont,env,table.unpack(exprs)) 
-          else
-            local res = {fval(table.unpack(exprs))}
-            cont(table.unpack(res))
-          end
-        end,env)
-      else env.error(fmt(\"%s: Expected function, got: %s\", tostring(fun), tostring(fval))) end
-    end, env)
-  end, {'call', fun, args})
-end
-
-local function CALLOBJ(obj, fun, ...)
-  local args = {...}
-  return CONT(function(cont,env) -- Return value out of expr
-    obj(function(objval)
-      if type(objval) ~= 'table' then
-        return env.error(fmt(\"%s: Expected table for :call, got: %s - %s\", tostring(fun), tostring(objval), tostring(obj)))
-      end
-      local fval = objval[fun]
-      local isCont = isContFun(fval)
-      if isCont or type(fval) == FUNCSTR then
-        evalArgs(args, function(exprs)
-          if isCont then -- continuation
-            fval(cont,env,objval,table.unpack(exprs)) 
-          else
-            local res = {fval(objval,table.unpack(exprs))}
-            cont(table.unpack(res))
-          end
-        end,env)
-      else env.error(fmt(\"%s: Expected function, got: %s - %s\", tostring(fun), tostring(fval), tostring(fun))) end
-    end, env)
-  end, {'call', fun, args})
-end
-
-local function GETPROP(prop,obj)
-  return CONT(function(cont,env)
-    obj(function(o)
-      local res = ER.executeGetProp(o,prop,env)
-      cont(res)
-    end,env)
-  end, {'getprop', prop, obj})
-end
-
-local function AREF(tab,key)
-  return CONT(function(cont,env) -- Return value out of expr
-    tab(function(t)
-      if type(t) == 'table' then
-        key(function(k)
-          cont(t[k])
-        end,env)
-      else env.error(fmt(\"Expected table, got: %s - %s.%s\",tostring(t),tostring(tab),tostring(key))) end
-    end,env)
-  end, {'aref', tab, key})
-end
-
-local function VAR(name,cvar) 
-  return CONT(function(cont,env) 
-    if cvar then cont(ER.computedVar[name]()) else cont(env:getVariable(name)) end
-  end, {'var', name})
-end
-
-local function GVAR(name)
-  return CONT(function(cont,env)
-    if name == 'Beveiliging_Alarm' then
-      print(name)
-    end
-    local val,err = fibaro.getGlobalVariable(name)
-    if val == nil then 
-      fibaro.warning(__TAG,\"Global variable not found: \"..tostring(name))
-    end
-    cont(ER.marshallFrom(val)) 
-  end, {'gvar', name}) 
-end
-local function QVAR(name) return CONT(function(cont,env) cont(quickApp:getVariable(name)) end, {'qvar', name}) end
-local function IVAR(name) return CONT(function(cont,env) cont(quickApp:internalStorageGet(name)) end, {'ivar', name}) end
-
-local function ASSIGNM(vars,exprs)
-  return CONT(function(cont,env) -- Return value out of expr
-    evalArgs(exprs, function(values)
-      local function nextAssign(i)
-        if i > #vars then cont(true)
-        else 
-          vars[i](env,values[i],nextAssign,i+1)
-        end
-      end
-      nextAssign(1)
-    end,env)
-  end,{'assignm',vars,exprs})
-end
-
-local function LOCAL(vars,exprs)
-  return CONT(function(cont,env)
-    evalArgs(exprs, function(values)
-      for i,var in ipairs(vars) do
-        env:pushVariable(var, values[i])
-      end
-      cont(true)
-    end,env)
-  end, {'local', vars, exprs})
-end
-
-local function INCVAR(name, op, value)
-  return CONT(function(cont, env)
-    value(function(val)
-      local var = env:getVariable(name)
-      if tonumber(var)==nil then return env.error(\"Not a number: \"..tostring(name)) end
-      local newValue = opFuns[op](var,val)
-      env:setVariable(name, newValue)
-      cont(newValue)
-    end,env)
-  end, {'incvar', name, op, value})
-end
-
-local function VARARGSTABLE(name)
-  return CONT(function(cont, env)
-    local var = env:getVariable('...')
-    if type(var) == 'table' then
-      cont(var)
-    else
-      env.error(\"Expected table for varargs, got: \" .. tostring(var))
-    end
-  end, {'varargs', name})
-end
-
-local function ASYNCFUN(fun) --- fun(cb,...)
-  return CONTFUN(function(cont, env, ...)
-    local timedout,ref = false,nil
-    local cb = function(...) if ref then env:clearTimeout(ref) end; if not timedout then cont(...) end end
-    local acb = setmetatable({env = env} , { __call = function(t,...) return cb(...) end })
-    local timeout = fun(acb,...)
-    timeout = tonumber(timeout) or 3000
-    if timeout >= 0 then
-      ref = env:setTimeout(function() 
-        timedout = true
-        env.error(fmt(\"%s: Async function timeout after %s ms\", tostring(fun), tostring(timeout)))
-      end, timeout)
-    end
-  end)
-end
-
-local function FUNC(params, body)
-  return CONT(function(cont,env) -- Return value out of expr
-    cont(CONTFUN(function(cont,env,...)
-      local __cont = function(...) 
-         env:popEnv() cont(...)
-      end
-      env:pushEnv({__cont = {__cont}, __return = {__cont}})
-      local args = {...}
-      for i=1,#params-1 do
-        local param = params[i]
-        local value = args[i]
-        env:pushVariable(param,value)
-      end
-      local param = params[#params]
-      if param == '...' then
-        local vararg = {}
-        for i=#params,#args do vararg[#vararg+1] = args[i] end
-        env:pushVariable(param, vararg)
-      else
-        local value = args[#params]
-        env:pushVariable(param,value)
-      end
-      --print(json.encode(args),json.encodeFast(cleanVars(env.vars)))
-      body(__cont,env)
-    end))
-  end,{'func',params,body})
-end
-
-local function RETURN(...)
-  local args = {...}
-  return CONT(function(cont,env) -- Return value out of expr
-    local ret = env:getVariable('__return') or env.cont or cont
-    evalArgs(args, function(exprs)
-      --print(\"RET\", ret==cont, json.encodeFast(exprs),tostring(ret))
-      ret(table.unpack(exprs))
-    end, env)
-  end, {'return', args})
-end
-
-local function args2str(...) local r = {} for i,v in ipairs({...}) do r[i] =type(v)=='table' and json.encodeFast(v) or tostring(v) end return table.unpack(r) end
-ER.args2str = args2str
-
-local function findVar(name,vars)
-  local lastEnv = vars
-  while vars do
-    local v = vars[name]
-    if v then return v else lastEnv = vars; vars = vars.__parent end
-  end
-  return nil,lastEnv
-end
-local function createEnv(cont,err,opts)
-  local env = { vars = opts.env or {}, error = err, cont = cont }
-  local globalEnv = opts.env
-  function env:pushVariable(name,value) local v = self.vars[name] if v then v[1]=value else self.vars[name] = {value} end end
-  function env:setVariable(name,val,global)
-    if global then 
-      local v = globalEnv[name]
-      if v then v[1]=val else globalEnv[name] = {val} end
-    end
-    local v,last = findVar(name,self.vars) 
-    if v then v[1]=val else last[name] = {val} end 
-  end
-  function env:getVariable(name) 
-    local v = findVar(name,self.vars)  
-    if v then return v[1] else return _G[name] end 
-  end
-  function env:pushEnv(e) e = e or {} e.__parent = self.vars; self.vars = e end
-  function env:popEnv() self.vars = self.vars.__parent or {} end
-  local cst,cct = opts.setTimeout or setTimeout,opts.clearTimeout or clearTimeout
-  function env:setTimeout(f,t) return cst(f,t) end
-  function env:clearTimeout(ref) return cct(ref) end
-  return env
-end
-ER.createEnv = createEnv
-
-local function RULE(expr,opts) return function() return ER.defRule(expr,opts) end end
-local function RULECHECK(rule) return 
-  CONT(function(cont,env) 
-    if env.locals then
-      for k,v in pairs(env.locals) do env:pushVariable(k,v) end
-    end
-    rule(function(...)
-      if env.check then env.check(env.rule,env,...) end
-      cont(...)
-    end,env) 
-  end,{'rulecheck',rule}) 
-end
-
-local function EXPR(expr,opts)
-  return function()
-    opts = opts or {}
-    local res = {}
-    local cont = opts.cont or function(...) 
-      res = {...} 
-      if not opts.no_expr_result then print(args2str(...)) end 
-    end
-    local src = opts.src or \"<expr>\"
-    local err = opts.err or function(str) print(fmt(\"❌ '%s': %s\", src // 80,str)) end
-    local env = createEnv(cont, err, opts)
-    env.src = src
-    env.env = opts.env or ER.ruleEnv
-    expr(cont, env)
-    return table.unpack(res)
-  end
-end
-
-local funs = {
-  IF = IF,
-  IFA = IFA,
-  AND = AND,
-  OR = OR,
-  WHILE = WHILE,
-  REPEAT = REPEAT,
-  FORIN = FORIN,
-  LOOP = LOOP,
-  PROGN = PROGN,
-  CONST = CONST,
-  AREF = AREF,
-  BINOP = BINOP,
-  UNOP = UNOP,
-  CALL = CALL,
-  CALLOBJ = CALLOBJ,
-  GETPROP = GETPROP,
-  FUNC = FUNC,
-  EXPR = EXPR,
-  RULE = RULE
-}
-
-
-local function compError(str,expr) 
-  local dbg = expr._dbg or { to = 1, from = 1}
-  local from,to = dbg.from,dbg.to
-  ER.perror('Compiler',str,from,to,currentSrc,nil)
-end
-
-local compa, comp = function(_) end, {}
-
-local function compileList(list) local r = {} for _,e in ipairs(list) do r[#r+1] = compa(e) end return r end
-
-function comp.table(expr)
-  if expr.const then return CONST(expr.value) end
-  local args = {}
-  for _,v in ipairs(expr.value) do
-    local key = v.key and {type='const',value=v.key} or v.expr
-    args[#args+1] = { expr = compa(key), value = compa(v.value) }
-  end
-  return TABLE(args)
-end
-
-locals = {}
-local function pushLocals(ls) ls.__parent = locals; locals = ls end
-local function popLocals() locals = locals.__parent end
-local function isLocal(name) return locals and locals[name] end
-
-function comp.block(expr,noframe)
-  if expr.locals then pushLocals(expr.locals) end
-  local args = compileList(expr.statements)
-  if expr.locals then popLocals() end
-  noframe = noframe or not expr.scope
-  if #args == 1 then return noframe and args[1] or FRAME(args[1]) end
-  return noframe and PROGN(table.unpack(args)) or FRAME(PROGN(table.unpack(args)))
-end
-
-function comp.binop(expr)
-  if expr.op == 'assign' then compError(fmt(\"'assign' not allowed in%s expression\",(isHead and \" trigger\" or \"\")),expr) end
-  local exp1 = compa(expr.exp1)
-  local exp2 = compa(expr.exp2)
-  return BINOP(expr.op, exp1, exp2)
-end
-
-function comp.seqop(expr)
-  local args = compileList(expr.exprs)
-  if expr.op == 'or' then return OR(table.unpack(args))
-  elseif expr.op == 'and' then return AND(table.unpack(args))
-  else error(\"Unknown seqop: \"..tostring(expr.op)) 
-  end
-end
-
-function comp.unop(expr)
-  return UNOP(expr.op, compa(expr.exp), expr.a, expr.b)
-end
-
-local builtin = {}
-local BUILTIN = function(name)
-  if builtin[name] then return funs[builtin[name]] end
-  return nil
-end
-
-comp['break'] = function(expr)
-  if isHead then compError(\"'break' not allowed in trigger expression\",expr) end
-  return BREAK()
-end
-
-comp['breakif'] = function(expr)
-  return IF(compa(expr.cond), BREAK())
-end
-
-function comp.call(expr)
-  local args = compileList(expr.args)
-  local fun = expr.fun.type == 'name' and BUILTIN(expr.fun.value) 
-  if fun then return fun(table.unpack(args))
-  else
-    fun = compa(expr.fun)
-    return CALL(fun, table.unpack(args))
-  end
-end
-
-function comp.objcall(expr)
-  local args = compileList(expr.args)
-  local obj = compa(expr.obj)
-  local fun = expr.fun
-  return CALLOBJ(obj, fun, table.unpack(args))
-end
-
-function comp.name(expr) 
-  if expr.vt == 'ev' then
-    local cvar = ER.computedVar[expr.value]
-    return VAR(expr.value,cvar) 
-  elseif expr.vt == 'gv' then return GVAR(expr.value:sub(2)) 
-  elseif expr.vt == 'qv' then return QVAR(expr.value:sub(3)) 
-  elseif expr.vt == 'sv' then return IVAR(expr.value:sub(4)) 
-  else error(\"Not implemented:\"..tostring(expr.vt)) end
-end
-
-comp['return'] = function(expr)
-  if isHead then compError(\"'return' not allowed in trigger expression\",expr) end
-  local args = compileList(expr.exp)
-  return RETURN(table.unpack(args))
-end
-
-
-comp['if'] = function(expr)
-  if isHead then compError(\"'if/case' not allowed in trigger expression\",expr) end
-  local args = {}
-  for _,c in ipairs(expr.args) do
-    args[#args+1] = { cond = c.cond and compa(c.cond) or nil, body = compa(c.body) }
-  end
-  return IFA(args)
-end
-
-local function condFRAME(frame,expr) return frame and FRAME(expr) or expr end
-
-comp['while'] = function(expr)
-  if isHead then compError(\"'while' not allowed in trigger expression\",expr) end
-  local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
-  return condFRAME(frame,WHILE(compa(expr.cond), compa(expr.body)))
-end
-comp['repeat'] = function(expr)
-  if isHead then compError(\"'repeat' not allowed in trigger expression\",expr) end
-  local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
-  return condFRAME(frame,REPEAT(compa(expr.cond), compa(expr.body)))
-end
-
-comp['loop'] = function(expr)
-  if isHead then compError(\"'loop' not allowed in trigger expression\",expr) end
-  local args = compileList(expr.statements)
-  if #args == 1 then return LOOP(args[1]) end
-  return LOOP(PROGN(table.unpack(args)))
-end
-
-comp['forin'] = function(expr)
-  if isHead then compError(\"'for' not allowed in trigger expression\",expr) end
-  return FORIN(expr.names,compa(expr.exp[1]),compa(expr.body))
-end
-
-function comp.num(expr) return CONST(expr.value) end
-function comp.const(expr) return CONST(expr.value) end
-function comp.str(expr) return CONST(expr.value) end
-
-function comp.aref(expr)
-  local table = compa(expr.tab)
-  local key = compa({type='num',value=expr.idx})
-  return AREF(table, key)
-end
-
-comp['local'] = function(expr)
-  return LOCAL(expr.names,compileList(expr.exprs or {}))
-end
-
-function comp.assign(expr)
-  if isHead then compError(\"'assign' not allowed in trigger expression\",expr) end
-  local exprs = compileList(expr.exprs)
-  local vars = {}
-  for _,v in ipairs(expr.vars) do
-    if v.type == 'name' then
-      if v.vt == 'ev' then
-      local var = v.value
-      vars[#vars+1] = function(env,val,cont,i)
-        if ER.triggerVars[var] then
-          local oldValue = env:getVariable(var)
-          if oldValue ~= val then
-            ER.sourceTrigger:post({type='trigger-variable',name=var},0)
-          end
-        end
-        env:setVariable(var,val,not isLocal(var)) 
-        cont(i)
-      end
-    elseif v.vt == 'gv' then
-      local var = v.value:sub(2)
-      vars[#vars+1] = function(env,val,cont,i) 
-        fibaro.setGlobalVariable(var,type(val)=='string' and val or json.encodeFast(val))
-        cont(i)
-      end
-    elseif v.vt == 'qv' then
-      local var = v.value:sub(3)
-      vars[#vars+1] = function(env,val,cont,i) 
-        quickApp:setVariable(var,val)
-        cont(i)
-      end
-    elseif v.vt == 'sv' then
-      local var = v.value:sub(4)
-      vars[#vars+1] = function(env,val,cont,i) 
-        quickApp:internalStorageSet(var,val)
-        cont(i)
-      end
-    else
-      error(\"Not implemented: \"..tostring(v.vt))
-    end
-    elseif v.type == 'aref' then
-      local var = {tab=compa(v.tab), idx=v.idx}
-      if type(var.idx) == 'table' then var.idx = compa(v.idx) end
-      vars[#vars+1] = function(env,val,cont,i) --{type='aref',tab=compa(v.tab), idx=v.idx}
-        var.tab(function(tab)
-          if isCont(var.idx) then
-            var.idx(function(idx)
-              tab[idx] = val
-              cont(i)
-            end,env)
-          else
-            tab[v.idx] = val
-            cont(i)
-          end
-        end,env)
-      end
-    elseif v.type == 'getprop' then
-      local var = {obj=compa(v.obj), prop=v.prop}
-      vars[#vars+1] = function(env,val,cont,i)
-        var.obj(function(obj)
-          ER.executeSetProp(obj,var.prop,val,env)
-          cont(i)
-        end,env)
-      end
-    else
-      error(\"Not supported assignment: \"..tostring(v.type))
-    end
-  end
-  return ASSIGNM(vars, exprs)
-end
-
-function comp.incvar(expr) 
-  if isHead then compError(\"'var incremental' not allowed in trigger expression\",expr) end
-  return INCVAR(expr.name,expr.op,compa(expr.value)) 
-end
-
-function comp.getprop(expr) return GETPROP(expr.prop,compa(expr.obj)) end
-
-local function makeVarAssign(var) return function(env,val,cont,i) env:setVariable(var,val) cont(i) end end
-
-function comp.functiondef(expr)
-  if isHead then compError(\"'function definition' not allowed in trigger expression\",expr) end
-  local fun = compa(expr.fun)
-  return ASSIGNM({makeVarAssign(expr.name[1])},{fun})
-end
-
-comp['function'] = function(expr)
-  local fun = compa(expr.body)
-  return FRAME(FUNC(expr.params, fun))
-end
-
-comp['functionexpr'] = function(expr) return compa(expr.fun) end
-
-comp['varargstable'] = function(expr) return VARARGSTABLE() end
-
-function compa(expr)
-  if comp[expr.type] then return comp[expr.type](expr)
-  else error(\"Not implemented:\"..tostring(expr.type)) end
-end
-
-function compile(ast)
-  if ast.type == 'block' then
-    return comp.block(ast,false)
-  elseif ast.type == 'ruledef' then
-    local head = ast.head
-    local body = ast.body
-    isHead = true
-    local h = compa(head)
-    isHead = false
-    local b = compa(body)
-    return IF(RULECHECK(h),b)
-  else error(\"Not implemented:\"..tostring(ast.type)) end
-end
-
-local function eval(str,opts)
-  assert(type(str) == \"string\",\"Expected string\")
-  currentSrc = str
-  opts = opts or {}
-  local isRule = false
-  local stat,ast = xpcall(function()
-    local tkns = ER.tokenize(str)
-    if opts.tokens then tkns.dump() end
-    if tkns.containsType('t_rule') then
-      table.insert(tkns.stream,1,{type='t_rulebegin',dbg={from=0,to=0}})
-      table.insert(tkns.stream,{type='t_ruleend',dbg={from=0,to=0}})
-      isRule = true
-    end
-    ast,j,k = ER.parse(tkns)
-    return ast
-  end,function(e)
-    if fibaro.plua then 
-      local info = debug.getinfo(2)
-       dbg = debug.traceback()
-    end
-    return e
-  end)
-  if not stat then fibaro.error(__TAG,fmt(\"%s %s\",\"❌\",tostring(ast))) return idfun end
-  if opts.tree then print(json.encodeFormated(ast)) end
-  locals = nil
-    local cstat,res = pcall(function()
-    local cont = compile(ast)
-    opts.src = ast._src
-    return isRule and RULE(cont,opts) or EXPR(cont,opts)
-  end)
-  if not cstat then print(res) return idfun else return res end
-end
-
-ER.compile = compile
-ER.eval = eval
-ER.ASYNCFUN = ASYNCFUN
-ER.COMPFUNS = funs","isMain":false,"isOpen":false},{"type":"lua","name":"parser","content":"
+ER.base64encode = base64encode","isMain":false,"isOpen":false},{"type":"lua","name":"parser","content":"
 fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner 
 local debugFlags = ER.debugFlags
@@ -3635,410 +3085,960 @@ end
 ER.executeGetProp = executeGetProp
 ER.executeSetProp = executeSetProp
 ER.resolvePropObject = resolvePropObject
-ER.preResolvePropObject = preResolvePropObject","isMain":false,"isOpen":false},{"type":"lua","name":"sim","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
+ER.preResolvePropObject = preResolvePropObject","isMain":false,"isOpen":false},{"type":"lua","name":"compiler","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner
 local debugFlags = ER.debugFlags
+local isHead,currentSrc = false,\"\" 
 
-local speed = {}
-local timeOffset = os.time() 
-local fibdebug = fibaro.debug
-function speed.debug(tag,...) 
-  fibdebug(tag,os.date(\"%Y-%m-%d %H:%M:%S\",speed.userTime()),...) 
-end
-local _setTimeout,_clearTimeout,_setInterval,_clearInterval = setTimeout,clearTimeout,setInterval,clearInterval
-local _time,_date = os.time,os.date
-
-local orgTime,orgDate,timeOffset = os.time,os.date,0
-
-local function round(x) return math.floor(x+0.5) end
-function speed.userTime(a) 
-  return a == nil and round(_time() + timeOffset) or _time(a) 
-end
-local function userMilli() return _time() + timeOffset end
-function speed.userDate(a, b) 
-  return b == nil and orgDate(a, speed.userTime()) or _date(a, round(b)) 
-end
-
-local function getTimeOffset() return timeOffset end
-local function setTimeOffset(offs) timeOffset = offs end
-
-local function createQueue()
-  local self = {}
-  local times = nil -- linked list of sorted timers
-  
-  function self:add(t,fun,id)
-    local v = nil
-    v = {time=t,fun=fun,id=id}
-    if not times then times = v return v end
-    if t < times.time then
-      times.prev = v
-      v.next = times
-      times = v
-      return v
-    end
-    local p = times
-    while p.next and p.next.time < t do p = p.next end
-    v.next = p.next
-    if p.next then p.next.prev = v end
-    p.next = v
-    v.prev = p
-    return v
-  end
-  
-  function self:remove(v)
-    if v and not v.dead then
-      v.dead = true
-      if v.prev == nil then
-        times = v.next
-        if times then times.prev = nil end
-      elseif v.next == nil then
-        v.prev.next = nil
-      else
-        v.prev.next = v.next
-        v.next.prev = v.prev
-      end
-    end
-  end
-  
-  function self:pop() local t = times; if times then times.dead=true  times = times.next end return t end
-  function self:peek() return times end
-  return self
-end
-
-local timers = createQueue()
-local timerID = 0
-local timerIDs = {}
-
-function speed.setTimeout(fun,ms)
-  timerID = timerID + 1
-  local v = timers:add(speed.userTime()+ms/1000,fun,timerID)
-  timerIDs[timerID] = v
-  return timerID
-end
-
-function speed.clearTimeout(ref)
-  if timerIDs[ref] then
-    timers:remove(timerIDs[ref])
-    timerIDs[ref] = nil
-  end
-end
-
-local intervID = 0
-local intervIDs = {}
-
-function speed.setInterval(fun,ms)
-  local function loop()
-    if not intervIDs[intervID] then return end
-    fun()
-    if not intervIDs[intervID] then return end
-    intervIDs[intervID] = speed.setTimeout(loop,ms)
-  end
-  intervID = intervID + 1
-  intervIDs[intervID] = speed.setTimeout(loop,ms)
-  return intervID
-end
-
-function speed.clearInterval(ref)
-  if intervIDs[ref] then
-    speed.clearTimout(intervIDs[ref])
-    intervIDs[ref] = nil
-  end
-end
-
-local running = false
-function speed.loop()
-  if running then return end
-  running = true
-  while speed.userTime() <= speed.stopTime do
-    local t = timers:pop()
-    if not t then break end
-    local offs = t.time - _time()
-    setTimeOffset(offs)
-    --print(os.date(\"%Y-%m-%d %H:%M:%S\",speed.userTime()),\" Timer:\",t.id)
-    t.fun()
-  end
-end
-
-if fibaro.plua then
-  local id = 10000
-  local function createDevice(path)
-    local code = fibaro.plua.lib.readFile(path)
-    local d = fibaro.plua.lib.loadQAString(code,{headers={\"desktop:false\"}})
-    return d.device.id
-  end
-  ER.loadSimDev = createDevice
-end
-  
-function ER.speedTime(speedTime,fun)
-  speed.stopTime = os.time() + speedTime*3600
-  fibaro.debug = speed.debug
-  setTimeout = speed.setTimeout
-  clearTimeout = speed.clearTimeout
-  setInterval = speed.setInterval
-  clearInterval = speed.clearInterval
-  os.time = speed.userTime
-  os.date = speed.userDate
-  setTimeout(fun,0)
-  speed.loop()
-end","isMain":false,"isOpen":false},{"type":"lua","name":"builtin","content":"fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
-local ER = fibaro.EventRunner
-local debugFlags = ER.debugFlags
 local fmt = string.format
+local function idfun() end
 
-local args = {}
-local builtin = {}
-ER.builtin = builtin
+local FUNCSTR = \"funct\"..\"ion\"
 
-local function detag(str) 
-  str = str:gsub(\"(#C:)(.-)(#)\",function(_,c) color=c return \"\" end)
-  if color then str=string.format(\"<font color='%s'>%s</font>\",color,str) end
-  return str
-end
-
-function builtin.log(...) -- printable tables and #C:color# tag
-  local args,n = {...},0
-  for i=1,#args do 
-    local a = args[i]
-    local typ = type(a)
-    n = n+1
-    if typ == 'string' then args[i] = detag(a)
-    elseif typ == 'table' or typ == 'userdata' then 
-      local mt = getmetatable(a)
-      if mt and mt.__tostring then args[i] = tostring(a)
-      else args[i] = json.encodeFast(a) end
-    end
+local function docify(c)
+  if type(c) ~= 'table' then return c end
+  if c.__doc then 
+    return docify(c.__doc)
+  else
+    local r = {}
+    for k,v in pairs(c) do r[k] = docify(v) end
+    return r
   end
-  local msg = \"\"
-  if n == 1 then msg = args[1] elseif n > 1 then msg = string.format(table.unpack(args)) end
-  print(msg)
-  return msg
 end
 
-function builtin.post(ev,time) return ER._er.post(ev,time) end
-function builtin.cancel(ref) return ER._er.cancel(ref) end
-function builtin.fmt(...) return string.format(...) end
-function builtin.HM(t) return os.date(\"%H:%M\",t < os.time()-8760*3600 and t+ER.midnight() or t) end
-function builtin.HMS(t) return os.date(\"%H:%M\",t < os.time()-8760*3600 and t+ER.midnight() or t) end
-function builtin.sign(t) return t < 0 and -1 or 1 end
-function builtin.rnd(min,max) return math.random(min,max)end
-function builtin.round(num) return math.floor(num+0.5) end
-function builtin.sum(...) 
-  local args = {...}
-  if #args == 1 and type(args[1]) == \"table\" then args = args[1] end
-  local s = 0 for i=1,#arg do s = s + arg[i] end
-  return s
-end
-function builtin.average(...) local s = builtin.sum(...) return s / select(\"#\", ...) end
-function builtin.size(t) return #t end
-function builtin.min(...) 
-  local args = {...}
-  if #args == 1 and type(args[1]) == \"table\" then args = args[1] end
-  return math.min(table.unpack(args))
-end
-function builtin.max(...) 
-  local args = {...}
-  if #args == 1 and type(args[1]) == \"table\" then args = args[1] end
-  return math.max(table.unpack(args))
-end
-function builtin.sort(t) table.sort(t) return t end
-function builtin.osdate(a,b) return os.date(a,b) end
-function builtin.ostime(t) return os.time(t) end
-
-function builtin.global(name)
-  local s = fibaro.getGlobalVariable(name)     
-  local a,b = api.post(\"/globalVariables/\",{name=name,value = \"\"})
-  return s == nil,(s == nil and fmt(\"'%s' created\",name) or fmt(\"'%s' exists\",name))
+local function CONTFUN(fun) 
+  return setmetatable({ __continuationFun =true },{
+    __call = function(t,...) return fun(...) end
+  })
 end
 
-function builtin.listglobals() return api.get(\"/globalVariables\") end
-function builtin.deleteglobal(name) api.delete(\"/globalVariables/\"..name) end
-
-function builtin.subscribe(event) end
-function builtin.publish(event) end
-function builtin.remote(deviceId,event) end
-function builtin.adde(t,v) table.insert(t,v) return t end
-function builtin.remove(t,v) 
-  for i=#t,1,-1 do if t[i]==v then table.remove(t,i) end end 
-  return t
+local function CONT(cont,doc) 
+  return setmetatable({ __continuation = true, __doc = doc },{
+    __call = function(t,...) return cont(...) end,
+    __tostring = function(t) return (doc and json.encodeFast(docify(doc)) or \"\") end
+  })
 end
 
-function builtin.enable(rule) end
-function builtin.disable(rule) end
+local function isContFun(obj) return type(obj) == 'table' and obj.__continuationFun end
+local function isCont(obj) return type(obj) == 'table' and obj.__continuation end
 
-function ER.customDefs(er)
-    local rule,var = er.rule,er.variables
-
-    ER.computedVar.now = ER.now
-
-    function var.async.trueFor(cb,time,expr)
-    local trueFor = cb.env.rule.trueFor or {}
-    cb.env.rule.trueFor = trueFor
-    if expr then -- test is true
-      if not trueFor.ref then -- new, start timer
-        trueFor.trigger = cb.env.trigger
-        trueFor.ref = cb.env:setTimeout(function() trueFor.ref = nil; cb(true) end, time*1000)
-        return math.huge
-      else -- already true and we have timer waiting
-        cb(false) -- do nothing
+local function IF(test, t, f)
+  return CONT(function(cont,env)
+    test(function(res)
+      if res then
+        t(cont, env)
+      else
+        if f then f(cont, env) else cont(false) end
       end
-    elseif trueFor.ref then -- test is false, and we have timer
-      cb.env:clearTimeout(trueFor.ref)
-      trueFor.ref = nil
-      cb(false)
+    end, env)
+  end,{'if', test, t, f})
+end
+
+local function IFA(args)
+  return CONT(function(cont,env)
+    local function doTest(i)
+      if i > #args then
+        cont(true)
+        return
+      end
+      local test = args[i]
+      if not test.cond then test.body(cont, env)
+      else
+        test.cond(function(res)
+          if res then
+            test.body(cont, env)
+          else
+            doTest(i + 1)
+          end
+        end, env)
+      end
+      
+    end
+    doTest(1)
+  end,{'ifa',args})
+end
+
+local function AND(...)
+  local tests = {...}
+  return CONT(function(cont, env)
+    local function nextTest(index, res)
+      if index > #tests then
+        cont(res)
+      else
+        local test = tests[index]
+        if isCont(test) or type(test) == FUNCSTR then
+          test(function(res)
+            if res then
+              nextTest(index + 1, res)
+            else
+              cont(false)
+            end
+          end, env)
+        elseif test then 
+          nextTest(index + 1, test)
+        else
+          cont(test)
+        end
+      end
+    end
+    nextTest(1, false)
+  end,{'and',tests})
+end
+
+local function OR(...)
+  local tests = {...}
+  return CONT(function(cont, env)
+    local function nextTest(index, res)
+      if index > #tests then
+        cont(res)
+      else
+        local test = tests[index]
+        if isCont(test) or type(test) == FUNCSTR then
+          test(function(res)
+            if res then 
+              cont(res)
+            else
+              nextTest(index + 1, res)
+            end
+          end, env)
+        elseif test then 
+          cont(test) 
+        else
+          nextTest(index + 1, test)
+        end
+      end
+    end
+    nextTest(1, false)
+  end,{'or',tests})
+end
+
+local function WHILE(cond,body)
+  return CONT(function(cont, env)
+    local function loop()
+      cond(function(res)
+        if res then 
+          body(function() env:setTimeout(loop,0) end,env)
+        else
+          cont(true) -- Exit the loop
+        end
+      end, env)
+    end
+    loop()
+  end,{'while',cond,body})
+end
+
+local function REPEAT(cond,body)
+  return CONT(function(cont, env)
+    local function loop()
+      body(function()
+        cond(function(res)
+          if not res then env:setTimeout(loop, 0)
+          else cont(true) end
+        end, env)
+      end,env)
+    end
+    loop()
+  end,{'repeat',cond,body})
+end
+
+local function LOOP(body) -- loop forever - needs break/return
+  return CONT(function(cont, env)
+    local function loop()
+      body(function() env:setTimeout(loop,0) end, env)
+    end
+    loop()
+  end,{'loop',body})
+end
+
+local function FRAME(expr)
+  return CONT(function(cont, env)
+    local __cont = function(...) env:popEnv() cont(...) end
+    env:pushEnv({__cont = {__cont}})
+    expr(__cont, env)
+  end,{'frame',expr})
+end
+
+--[[
+local function mfor(vars, expr, body)
+  local f,t,i = expr()
+  kn ,vn = vars[1],vars[2]
+  vars[kn] = i
+  while true do
+    vars[kn], vars[vn] = f(t,vars[kn])
+    if vars[kn] == nil then break end
+    body()
+  end
+end
+--]]
+
+local function FORIN(vars,expr,body)
+  return FRAME(function(cont,env)
+    local kn,vn = table.unpack(vars)
+    env:pushVariable(kn,nil)
+    env:pushVariable(vn,nil)
+    expr(function(f,t,i)
+      local k,v = i,nil
+      local function loop()
+        k,v = f(t,k)
+        env:setVariable(kn,k)
+        env:setVariable(vn,v)
+        if not k then return cont(true) end
+        body(function() env:setTimeout(loop,0) end, env)
+      end
+      loop()
+    end,env)
+  end),{'forin',vars,expr,body}
+end
+
+local function evalArgs(args, cont, env)
+  if #args == 0 then
+    cont({})
+  else
+    local results = {}
+    local function nextArg(index)
+      local arg = args[index]
+      if type(arg) == FUNCSTR or isCont(arg) then
+        arg(function(arg1,...)
+          if index == #args then
+            results[index] = arg1
+            for _,a in ipairs({...}) do 
+              results[#results+1] = a
+            end
+            cont(results)
+          else
+            results[index] = arg1
+            nextArg(index + 1)
+          end
+        end, env)
+      else
+        results[index] = arg
+        nextArg(index + 1)
+      end
+    end
+
+    nextArg(1)
+  end
+end
+
+local function BREAK()
+  return CONT(function(cont, env)
+    local frameCont = env:getVariable('__cont')
+    env:setTimeout(function() frameCont(true) end, 0)
+  end, {'break'})
+end
+
+local function PROGN(...)
+  local statements = {...}
+  return CONT(function(cont,env)
+    evalArgs(statements, function(values)
+      local val = true
+      if #values > 0 then val = values[#statements] end
+      cont(val)
+    end,env)
+  end,{'progn',statements})
+end
+
+local function TABLE(args)
+  return CONT(function(cont, env)
+    local tbl = {}
+    local function nextVal(i)
+      if i > #args then
+        cont(tbl)
+      else
+        args[i].expr(function(key)
+          args[i].value(function(val)
+            tbl[key]=val
+            nextVal(i + 1)
+          end,env)
+        end,env)
+      end
+    end
+    nextVal(1)
+  end, {'table', args})
+end
+
+local function checkArgs(a,t1,b,t2,env,e1,e2)
+  if type(a) ~= t1 then env.error(fmt(\"%s: Expected %s, got: %s\",e1,t1,a))  end
+  if type(b) ~= t2 then env.error(fmt(\"%s: Expected %s, got: %s\",e2,t2,b))  end
+end
+
+local T2020 = os.time{year=2020, month=1, day=1, hour=0}
+local function coerce(a) if type(a) == 'table' then local mt=getmetatable(a) if mt and mt.__tostring then return mt.__tostring(a) end end return a end
+
+local opFuns = {
+  ['add'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 + arg2 end,
+  ['sub'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 - arg2 end,
+  ['mul'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 * arg2 end,
+  ['div'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 / arg2 end,
+  ['mod'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 % arg2 end,
+  ['pow'] = function(arg1,arg2,env,e1,e2) checkArgs(arg1,'number',arg2,'number',env,e1,e2) return arg1 ^ arg2 end,
+  ['eq'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 == arg2 end,
+  ['neq'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 ~= arg2 end,
+  ['lt'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 < arg2 end,
+  ['lte'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 <= arg2 end,
+  ['gt'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 > arg2 end,
+  ['gte'] = function(arg1,arg2,env,e1,e2) arg1,arg2 = coerce(arg1),coerce(arg2) return arg1 >= arg2 end,
+  ['betw'] = function(arg1,arg2,env,e1,e2)
+    checkArgs(arg1,'number',arg2,'number',env,e1,e2)
+    if arg1 > T2020 then
+      local tn = os.time()
+      return arg1 <= tn and tn <= arg2
     else
-      cb(false) -- do nothing
+      local ts = os.date(\"*t\")
+      local t = ts.hour*3600 + ts.min*60 + ts.sec
+      arg2 = arg2 >= arg1 and arg2 or arg2 + 24*3600
+      t = t >= arg1 and t or t + 24*3600
+      return arg1 <= t and t <= arg2
     end
-    return -1 -- not async...
-  end
+  end,
+  ['nilco'] = function(arg1,arg2,env,e1,e2) if arg1 ~= nil then return arg1 else return arg2 end end,
+}
 
-  function var.async.again(cb,n)
-    local trueFor = cb.env.rule.trueFor
-    if trueFor then
-      if trueFor.again and trueFor.again == 0 then trueFor.again = nil return cb(0) end 
-      if trueFor.again == nil then trueFor.again,trueFor.againN = n,n end-- reset
-      trueFor.again = trueFor.again - 1
-      if trueFor.trigger and  trueFor.again > 0 then 
-        cb.env:setTimeout(function() cb.env.rule:start(trueFor.trigger) end, 0)
-        cb(trueFor.againN - trueFor.again)
-      else trueFor.again = nil cb(trueFor.againN) end
-    else cb(0) end
-    return -1 -- not async...
-  end
+local function BINOP(op,exp1,exp2)
+  return CONT(function(cont, env)
+    exp1(function(v1)
+      exp2(function(v2)
+        if opFuns[op] then
+          local stat,err = pcall(function()
+            local res = opFuns[op](v1, v2, env, exp1, exp2)
+            cont(res)
+          end)
+          if not stat then
+            env.error(fmt(\"%s: %s %s %s\",(err or \"\"):match(\"%d+:%s*(.*)\") or err, op, exp1, exp2))
+          end
+        else
+          env.error(\"Unknown operator: \" .. tostring(op))
+        end
+      end, env)
+    end, env)
+  end, {'binop', op, exp1, exp2})
+end
 
-  function var.async.once(cb,expr)
-    local once = cb.env.rule.once
-    if expr then
-      if not once then 
-        cb.env.rule.once = true
-        cb(true)
-      else cb(false) 
+local function checkArg1(a,t1,b,t2,env,e)
+  if type(a) ~= t1 then env.error(fmt(\"%s: Expected %s, got: %s\",e,t1,a))
+  elseif type(b) ~= t2 then env.error(fmt(\"%s: Expected %s, got: %s\",e,t2,b)) 
+  else return true end
+end
+
+local unOpFuns = {
+  plus = function(v,a,b,e,env) return ER.toTime(\"+/\"..v) end,
+  next = function(v,a,b,e,env) return ER.toTime(\"n/\"..v) end,
+  today = function(v,a,b,e,env) return ER.toTime(\"t/\"..v) end,
+  add = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return v+(a or b) end end,
+  neg = function(v,a,b,e,env) return - v end,
+  sub = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return a and a-v or v-b end end,
+  mul = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return v*(a or b) end end,
+  div = function(v,a,b,e,env) if checkArg1(v,'number',a or b,'number',env,e) then return a and a/v or v/b  end end,
+  ['not'] = function(v,a,b,e,env) return not v  end,
+  daily = function(v,a,b,e,env)
+    local e = env.trigger
+    if not e then return env.error(\"No trigger in environment\") end
+    return e.type == 'Daily'  -- False if not a daily event triggering
+  end,
+  interv = function(v,a,b,e,env)
+    local e = env.trigger
+    if not e then return env.error(\"No trigger in environment\") end
+    return e.type == 'Interval'  -- False if not a daily event triggering
+  end,
+}
+
+
+local function UNOP(op, expr, v1, v2) --UNOP('add', expr, 1) end
+  return CONT(function(cont, env)
+    expr(function(val)
+      if unOpFuns[op] then
+        local res = unOpFuns[op](val,v1,v2,expr,env)
+        cont(res)
+      else
+        env.error(\"Unknown operator: \" .. tostring(op))
       end
-    else  cb.env.rule.once = nil; cb(false) end
-    return -1 -- not async
-  end
-  
-  function var.async.wait(cb,time)
-    if time < ER.T2020 then time = time + ER.now() end
-    if cb.env.waiting then cb.env.waiting(cb.env.rule,cb.env,time) end
-    cb.env:setTimeout(function() 
-      if cb.env.waited then cb.env.waited(cb.env.rule,cb.env,time) end
-      cb(true) 
-    end, 
-    time*1000)
-    return -1 -- not async
-  end
+    end, env)
+  end, {'unop', op, expr, v1, v2})
+end
 
-  local function makeDateFun(str,cache)
-    if cache[str] then return cache[str] end
-    local f = ER.dateTest(str)
-    cache[str] = f
-    return f
-  end
-  
-  local cache = { date={}, day = {}, month={}, wday={} }
-  var.date = function(s) return (cache.date[s] or makeDateFun(s,cache.date))() end               -- min,hour,days,month,wday
-  var.day = function(s) return (cache.day[s] or makeDateFun(\"* * \"..s,cache.day))() end          -- day('1-31'), day('1,3,5')
-  var.month = function(s) return (cache.month[s] or makeDateFun(\"* * * \"..s,cache.month))() end  -- month('jan-feb'), month('jan,mar,jun')
-  var.wday = function(s) return (cache.wday[s] or makeDateFun(\"* * * * \"..s,cache.wday))() end   -- wday('fri-sat'), wday('mon,tue,wed')
-  
-  var.S1 = {click = \"16\", double = \"14\", tripple = \"15\", hold = \"12\", release = \"13\"}
-  var.S2 = {click = \"26\", double = \"24\", tripple = \"25\", hold = \"22\", release = \"23\"}
-  
-  function var.nextDST()
-    local d0 = os.date(\"*t\")
-    local t0 = os.time({year=d0.year, month=d0.month, day=1, hour=0})
-    local h = d0.hour
-    repeat  t0 = t0 + 3600*24*30; d0 = os.date(\"*t\",t0) until d0.hour ~= h
-    t0 = t0 - 3600*24*30; d0 = os.date(\"*t\",t0)
-    repeat h = d0.hour; t0 = t0 + 3600*24; d0 = os.date(\"*t\",t0) until d0.hour ~= h
-    t0 = t0 - 3600*24; d0 = os.date(\"*t\",t0)
-    repeat h = d0.hour; t0 = t0 + 3600; d0 = os.date(\"*t\",t0) until d0.hour ~= (h+1) % 24
-    if d0.month > 7 then t0 = t0 + 3600 end
-    return t0
-  end
-  
-    -- Example of home made property object
-  Weather = {}
-  er.definePropClass(\"Weather\") -- Define custom weather object
-  function Weather:__init() PropObject.__init(self) end
-  function Weather.getProp.temp(prop,env) return api.get(\"/weather\").Temperature end
-  function Weather.getProp.humidity(prop,env) return  api.get(\"/weather\").Humidity end
-  function Weather.getProp.wind(prop,env) return  api.get(\"/weather\").Wind end
-  function Weather.getProp.condition(prop,env) return  api.get(\"/weather\").WeatherCondition end
-  function Weather.trigger.temp(prop) return {type='weather', property='Temperature'} end
-  function Weather.trigger.humidity(prop) return {type='weather', property='Humidity'} end
-  function Weather.trigger.wind(prop) return {type='weather', property='Wind'} end
-  function Weather.trigger.condition(prop) return {type='weather', property='WeatherCondition'} end
-  var.weather = Weather()
-  
-  ------- Patch fibaro.call to track manual switches -------------------------
-  local lastID,switchMap = {},{}
-  local oldFibaroCall = fibaro.call
-  function fibaro.call(id,action,...)
-    if ({turnOff=true,turnOn=true,on=true,toggle=true,off=true,setValue=true})[action] then lastID[id]={script=true,time=os.time()} end
-    if action=='setValue' and switchMap[id]==nil then
-      local actions = (__fibaro_get_device(id) or {}).actions or {}
-      switchMap[id] = actions.turnOff and not actions.setValue
-    end
-    if action=='setValue' and switchMap[id] then return oldFibaroCall(id,({...})[1] and 'turnOn' or 'turnOff') end
-    return oldFibaroCall(id,action,...)
-  end
-  
-  local function lastHandler(ev)
-    if ev.type=='device' and ev.property=='value' then
-      local last = lastID[ev.id]
-      local _,t = fibaro.get(ev.id,'value')
-      if not(last and last.script and t-last.time <= 2) then
-        lastID[ev.id]={script=false, time=t}
+local function CONST(n) 
+  local c
+  c = CONT(function(cont,env) 
+    if c.evalHook then c.evalHook(c,cont,env)
+    else cont(n) end
+  end, {'const', n})
+  return c
+end
+
+local function CALL(fun,...)
+  local args = {...}
+  return CONT(function(cont,env) -- Return value out of expr
+    fun(function(fval)
+      local isCont = isContFun(fval)
+      if isCont or type(fval) == FUNCSTR then
+        evalArgs(args, function(exprs)
+          if isCont then -- continuation
+            fval(cont,env,table.unpack(exprs)) 
+          else
+            local res = {fval(table.unpack(exprs))}
+            cont(table.unpack(res))
+          end
+        end,env)
+      else env.error(fmt(\"%s: Expected function, got: %s\", tostring(fun), tostring(fval))) end
+    end, env)
+  end, {'call', fun, args})
+end
+
+local function CALLOBJ(obj, fun, ...)
+  local args = {...}
+  return CONT(function(cont,env) -- Return value out of expr
+    obj(function(objval)
+      if type(objval) ~= 'table' then
+        return env.error(fmt(\"%s: Expected table for :call, got: %s - %s\", tostring(fun), tostring(objval), tostring(obj)))
       end
+      local fval = objval[fun]
+      local isCont = isContFun(fval)
+      if isCont or type(fval) == FUNCSTR then
+        evalArgs(args, function(exprs)
+          if isCont then -- continuation
+            fval(cont,env,objval,table.unpack(exprs)) 
+          else
+            local res = {fval(objval,table.unpack(exprs))}
+            cont(table.unpack(res))
+          end
+        end,env)
+      else env.error(fmt(\"%s: Expected function, got: %s - %s\", tostring(fun), tostring(fval), tostring(fun))) end
+    end, env)
+  end, {'call', fun, args})
+end
+
+local function GETPROP(prop,obj)
+  return CONT(function(cont,env)
+    obj(function(o)
+      local res = ER.executeGetProp(o,prop,env)
+      cont(res)
+    end,env)
+  end, {'getprop', prop, obj})
+end
+
+local function AREF(tab,key)
+  return CONT(function(cont,env) -- Return value out of expr
+    tab(function(t)
+      if type(t) == 'table' then
+        key(function(k)
+          cont(t[k])
+        end,env)
+      else env.error(fmt(\"Expected table, got: %s - %s.%s\",tostring(t),tostring(tab),tostring(key))) end
+    end,env)
+  end, {'aref', tab, key})
+end
+
+local function VAR(name,cvar) 
+  return CONT(function(cont,env) 
+    if cvar then cont(ER.computedVar[name]()) else cont(env:getVariable(name)) end
+  end, {'var', name})
+end
+
+local function GVAR(name)
+  return CONT(function(cont,env)
+    if name == 'Beveiliging_Alarm' then
+      print(name)
     end
-  end
-  
-  ER.sourceTrigger.eventEngine.registerCallback(lastHandler)
-  
-  function QuickApp:lastManual(id)
-    local last = lastID[id]
-    if not last then return -1 end
-    return last.script and -1 or os.time()-last.time
-  end
+    local val,err = fibaro.getGlobalVariable(name)
+    if val == nil then 
+      fibaro.warning(__TAG,\"Global variable not found: \"..tostring(name))
+    end
+    cont(ER.marshallFrom(val)) 
+  end, {'gvar', name}) 
+end
+local function QVAR(name) return CONT(function(cont,env) cont(quickApp:getVariable(name)) end, {'qvar', name}) end
+local function IVAR(name) return CONT(function(cont,env) cont(quickApp:internalStorageGet(name)) end, {'ivar', name}) end
 
-  local deviceFormatter = {}
-  function deviceFormatter.centralSceneEvent(ev) 
-    local val = ev.value or {}
-    return fmt(\"#key{id:%s,%s:%s}\", ev.id,val.keyId or \"*\", val.keyAttribute or \"*\")
-  end
-  function ER.eventFormatter.device(ev)
-    if deviceFormatter[ev.property] then return deviceFormatter[ev.property](ev) end
-    return false
-  end
+local function ASSIGNM(vars,exprs)
+  return CONT(function(cont,env) -- Return value out of expr
+    evalArgs(exprs, function(values)
+      local function nextAssign(i)
+        if i > #vars then cont(true)
+        else 
+          vars[i](env,values[i],nextAssign,i+1)
+        end
+      end
+      nextAssign(1)
+    end,env)
+  end,{'assignm',vars,exprs})
+end
 
+local function LOCAL(vars,exprs)
+  return CONT(function(cont,env)
+    evalArgs(exprs, function(values)
+      for i,var in ipairs(vars) do
+        env:pushVariable(var, values[i])
+      end
+      cont(true)
+    end,env)
+  end, {'local', vars, exprs})
+end
+
+local function INCVAR(name, op, value)
+  return CONT(function(cont, env)
+    value(function(val)
+      local var = env:getVariable(name)
+      if tonumber(var)==nil then return env.error(\"Not a number: \"..tostring(name)) end
+      local newValue = opFuns[op](var,val)
+      env:setVariable(name, newValue)
+      cont(newValue)
+    end,env)
+  end, {'incvar', name, op, value})
+end
+
+local function VARARGSTABLE(name)
+  return CONT(function(cont, env)
+    local var = env:getVariable('...')
+    if type(var) == 'table' then
+      cont(var)
+    else
+      env.error(\"Expected table for varargs, got: \" .. tostring(var))
+    end
+  end, {'varargs', name})
+end
+
+local function ASYNCFUN(fun) --- fun(cb,...)
+  return CONTFUN(function(cont, env, ...)
+    local timedout,ref = false,nil
+    local cb = function(...) if ref then env:clearTimeout(ref) end; if not timedout then cont(...) end end
+    local acb = setmetatable({env = env} , { __call = function(t,...) return cb(...) end })
+    local timeout = fun(acb,...)
+    timeout = tonumber(timeout) or 3000
+    if timeout >= 0 then
+      ref = env:setTimeout(function() 
+        timedout = true
+        env.error(fmt(\"%s: Async function timeout after %s ms\", tostring(fun), tostring(timeout)))
+      end, timeout)
+    end
+  end)
+end
+
+local function FUNC(params, body)
+  return CONT(function(cont,env) -- Return value out of expr
+    cont(CONTFUN(function(cont,env,...)
+      local __cont = function(...) 
+         env:popEnv() cont(...)
+      end
+      env:pushEnv({__cont = {__cont}, __return = {__cont}})
+      local args = {...}
+      for i=1,#params-1 do
+        local param = params[i]
+        local value = args[i]
+        env:pushVariable(param,value)
+      end
+      local param = params[#params]
+      if param == '...' then
+        local vararg = {}
+        for i=#params,#args do vararg[#vararg+1] = args[i] end
+        env:pushVariable(param, vararg)
+      else
+        local value = args[#params]
+        env:pushVariable(param,value)
+      end
+      --print(json.encode(args),json.encodeFast(cleanVars(env.vars)))
+      body(__cont,env)
+    end))
+  end,{'func',params,body})
+end
+
+local function RETURN(...)
+  local args = {...}
+  return CONT(function(cont,env) -- Return value out of expr
+    local ret = env:getVariable('__return') or env.cont or cont
+    evalArgs(args, function(exprs)
+      --print(\"RET\", ret==cont, json.encodeFast(exprs),tostring(ret))
+      ret(table.unpack(exprs))
+    end, env)
+  end, {'return', args})
+end
+
+local function args2str(...) local r = {} for i,v in ipairs({...}) do r[i] =type(v)=='table' and json.encodeFast(v) or tostring(v) end return table.unpack(r) end
+ER.args2str = args2str
+
+local function findVar(name,vars)
+  local lastEnv = vars
+  while vars do
+    local v = vars[name]
+    if v then return v else lastEnv = vars; vars = vars.__parent end
+  end
+  return nil,lastEnv
+end
+local function createEnv(cont,err,opts)
+  local env = { vars = opts.env or {}, error = err, cont = cont }
+  local globalEnv = opts.env
+  function env:pushVariable(name,value) local v = self.vars[name] if v then v[1]=value else self.vars[name] = {value} end end
+  function env:setVariable(name,val,global)
+    if global then 
+      local v = globalEnv[name]
+      if v then v[1]=val else globalEnv[name] = {val} end
+    end
+    local v,last = findVar(name,self.vars) 
+    if v then v[1]=val else last[name] = {val} end 
+  end
+  function env:getVariable(name) 
+    local v = findVar(name,self.vars)  
+    if v then return v[1] else return _G[name] end 
+  end
+  function env:pushEnv(e) e = e or {} e.__parent = self.vars; self.vars = e end
+  function env:popEnv() self.vars = self.vars.__parent or {} end
+  local cst,cct = opts.setTimeout or setTimeout,opts.clearTimeout or clearTimeout
+  function env:setTimeout(f,t) return cst(f,t) end
+  function env:clearTimeout(ref) return cct(ref) end
+  return env
+end
+ER.createEnv = createEnv
+
+local function RULE(expr,opts) return function() return ER.defRule(expr,opts) end end
+local function RULECHECK(rule) return 
+  CONT(function(cont,env) 
+    if env.locals then
+      for k,v in pairs(env.locals) do env:pushVariable(k,v) end
+    end
+    rule(function(...)
+      if env.check then env.check(env.rule,env,...) end
+      cont(...)
+    end,env) 
+  end,{'rulecheck',rule}) 
+end
+
+local function EXPR(expr,opts)
+  return function()
+    opts = opts or {}
+    local res = {}
+    local cont = opts.cont or function(...) 
+      res = {...} 
+      if not opts.no_expr_result then print(args2str(...)) end 
+    end
+    local src = opts.src or \"<expr>\"
+    local err = opts.err or function(str) print(fmt(\"❌ '%s': %s\", src // 80,str)) end
+    local env = createEnv(cont, err, opts)
+    env.src = src
+    env.env = opts.env or ER.ruleEnv
+    expr(cont, env)
+    return table.unpack(res)
+  end
+end
+
+local funs = {
+  IF = IF,
+  IFA = IFA,
+  AND = AND,
+  OR = OR,
+  WHILE = WHILE,
+  REPEAT = REPEAT,
+  FORIN = FORIN,
+  LOOP = LOOP,
+  PROGN = PROGN,
+  CONST = CONST,
+  AREF = AREF,
+  BINOP = BINOP,
+  UNOP = UNOP,
+  CALL = CALL,
+  CALLOBJ = CALLOBJ,
+  GETPROP = GETPROP,
+  FUNC = FUNC,
+  EXPR = EXPR,
+  RULE = RULE
+}
+
+
+local function compError(str,expr) 
+  local dbg = expr._dbg or { to = 1, from = 1}
+  local from,to = dbg.from,dbg.to
+  ER.perror('Compiler',str,from,to,currentSrc,nil)
+end
+
+local compa, comp = function(_) end, {}
+
+local function compileList(list) local r = {} for _,e in ipairs(list) do r[#r+1] = compa(e) end return r end
+
+function comp.table(expr)
+  if expr.const then return CONST(expr.value) end
+  local args = {}
+  for _,v in ipairs(expr.value) do
+    local key = v.key and {type='const',value=v.key} or v.expr
+    args[#args+1] = { expr = compa(key), value = compa(v.value) }
+  end
+  return TABLE(args)
+end
+
+locals = {}
+local function pushLocals(ls) ls.__parent = locals; locals = ls end
+local function popLocals() locals = locals.__parent end
+local function isLocal(name) return locals and locals[name] end
+
+function comp.block(expr,noframe)
+  if expr.locals then pushLocals(expr.locals) end
+  local args = compileList(expr.statements)
+  if expr.locals then popLocals() end
+  noframe = noframe or not expr.scope
+  if #args == 1 then return noframe and args[1] or FRAME(args[1]) end
+  return noframe and PROGN(table.unpack(args)) or FRAME(PROGN(table.unpack(args)))
+end
+
+function comp.binop(expr)
+  if expr.op == 'assign' then compError(fmt(\"'assign' not allowed in%s expression\",(isHead and \" trigger\" or \"\")),expr) end
+  local exp1 = compa(expr.exp1)
+  local exp2 = compa(expr.exp2)
+  return BINOP(expr.op, exp1, exp2)
+end
+
+function comp.seqop(expr)
+  local args = compileList(expr.exprs)
+  if expr.op == 'or' then return OR(table.unpack(args))
+  elseif expr.op == 'and' then return AND(table.unpack(args))
+  else error(\"Unknown seqop: \"..tostring(expr.op)) 
+  end
+end
+
+function comp.unop(expr)
+  return UNOP(expr.op, compa(expr.exp), expr.a, expr.b)
+end
+
+local builtin = {}
+local BUILTIN = function(name)
+  if builtin[name] then return funs[builtin[name]] end
+  return nil
+end
+
+comp['break'] = function(expr)
+  if isHead then compError(\"'break' not allowed in trigger expression\",expr) end
+  return BREAK()
+end
+
+comp['breakif'] = function(expr)
+  return IF(compa(expr.cond), BREAK())
+end
+
+function comp.call(expr)
+  local args = compileList(expr.args)
+  local fun = expr.fun.type == 'name' and BUILTIN(expr.fun.value) 
+  if fun then return fun(table.unpack(args))
+  else
+    fun = compa(expr.fun)
+    return CALL(fun, table.unpack(args))
+  end
+end
+
+function comp.objcall(expr)
+  local args = compileList(expr.args)
+  local obj = compa(expr.obj)
+  local fun = expr.fun
+  return CALLOBJ(obj, fun, table.unpack(args))
+end
+
+function comp.name(expr) 
+  if expr.vt == 'ev' then
+    local cvar = ER.computedVar[expr.value]
+    return VAR(expr.value,cvar) 
+  elseif expr.vt == 'gv' then return GVAR(expr.value:sub(2)) 
+  elseif expr.vt == 'qv' then return QVAR(expr.value:sub(3)) 
+  elseif expr.vt == 'sv' then return IVAR(expr.value:sub(4)) 
+  else error(\"Not implemented:\"..tostring(expr.vt)) end
+end
+
+comp['return'] = function(expr)
+  if isHead then compError(\"'return' not allowed in trigger expression\",expr) end
+  local args = compileList(expr.exp)
+  return RETURN(table.unpack(args))
 end
 
 
-","isMain":false,"isOpen":false},{"type":"lua","name":"main","content":"--%%name:EventRunner6
---%%headers:src/include.txt
---%%u:{label='info', text='EventRunnner 6'}
---%%save:dist/EventRunner6.fqa
---%%offline:true
-
-function QuickApp:main(er)
-  local rule,var = er.rule,er.variables
-  er.opts = { started = true, check = true, result = false, triggers=true}
-  
-  var.HT = {
-    kitchen = {
-      light = { roof = 66, window =  67, },
-      sensor = { roof = 68, },
-    },
-  }
-
-  rule(\"HT.kitchen.sensor.roof:breached => log('Roof sensor breached!'); HT.kitchen.light.roof:on\")
-  rule(\"@@00:00:05 => log('Ding!')\")
+comp['if'] = function(expr)
+  if isHead then compError(\"'if/case' not allowed in trigger expression\",expr) end
+  local args = {}
+  for _,c in ipairs(expr.args) do
+    args[#args+1] = { cond = c.cond and compa(c.cond) or nil, body = compa(c.body) }
+  end
+  return IFA(args)
 end
 
-function QuickApp:onInit()
-  local er = fibaro.EventRunner(self)
-  self:debug(er) 
-  self:updateView('info','text',tostring(er))
-  er.start()
-end","isMain":true,"isOpen":false}],"initialInterfaces":[],"initialProperties":{"apiVersion":"1.3","buildNumber":1,"deviceRole":"Other","quickAppUuid":"f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c","quickAppVariables":[],"supportedDeviceRoles":["Other"],"typeTemplateInitialized":true,"uiCallbacks":[],"uiView":[{"type":"horizontal","components":[{"type":"label","name":"info","style":{"weight":"1.0"},"text":"EventRunnner 6","visible":true}],"style":{"weight":"1.0"}}],"useEmbededView":true,"useUiView":true,"userDescription":"","viewLayout":{"$jason":{"body":{"header":{"style":{"height":"0"},"title":"quickApp_device_52"},"sections":{"items":[{"type":"vertical","components":[{"type":"label","name":"info","style":{"weight":"1.2"},"text":"EventRunnner 6","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}}]}},"head":{"title":"quickApp_device_52"}}}}}
+local function condFRAME(frame,expr) return frame and FRAME(expr) or expr end
+
+comp['while'] = function(expr)
+  if isHead then compError(\"'while' not allowed in trigger expression\",expr) end
+  local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
+  return condFRAME(frame,WHILE(compa(expr.cond), compa(expr.body)))
+end
+comp['repeat'] = function(expr)
+  if isHead then compError(\"'repeat' not allowed in trigger expression\",expr) end
+  local frame,locals = expr.body.scope,expr.body.locals; expr.body.scope = nil
+  return condFRAME(frame,REPEAT(compa(expr.cond), compa(expr.body)))
+end
+
+comp['loop'] = function(expr)
+  if isHead then compError(\"'loop' not allowed in trigger expression\",expr) end
+  local args = compileList(expr.statements)
+  if #args == 1 then return LOOP(args[1]) end
+  return LOOP(PROGN(table.unpack(args)))
+end
+
+comp['forin'] = function(expr)
+  if isHead then compError(\"'for' not allowed in trigger expression\",expr) end
+  return FORIN(expr.names,compa(expr.exp[1]),compa(expr.body))
+end
+
+function comp.num(expr) return CONST(expr.value) end
+function comp.const(expr) return CONST(expr.value) end
+function comp.str(expr) return CONST(expr.value) end
+
+function comp.aref(expr)
+  local table = compa(expr.tab)
+  local key = compa({type='num',value=expr.idx})
+  return AREF(table, key)
+end
+
+comp['local'] = function(expr)
+  return LOCAL(expr.names,compileList(expr.exprs or {}))
+end
+
+function comp.assign(expr)
+  if isHead then compError(\"'assign' not allowed in trigger expression\",expr) end
+  local exprs = compileList(expr.exprs)
+  local vars = {}
+  for _,v in ipairs(expr.vars) do
+    if v.type == 'name' then
+      if v.vt == 'ev' then
+      local var = v.value
+      vars[#vars+1] = function(env,val,cont,i)
+        if ER.triggerVars[var] then
+          local oldValue = env:getVariable(var)
+          if oldValue ~= val then
+            ER.sourceTrigger:post({type='trigger-variable',name=var},0)
+          end
+        end
+        env:setVariable(var,val,not isLocal(var)) 
+        cont(i)
+      end
+    elseif v.vt == 'gv' then
+      local var = v.value:sub(2)
+      vars[#vars+1] = function(env,val,cont,i) 
+        fibaro.setGlobalVariable(var,type(val)=='string' and val or json.encodeFast(val))
+        cont(i)
+      end
+    elseif v.vt == 'qv' then
+      local var = v.value:sub(3)
+      vars[#vars+1] = function(env,val,cont,i) 
+        quickApp:setVariable(var,val)
+        cont(i)
+      end
+    elseif v.vt == 'sv' then
+      local var = v.value:sub(4)
+      vars[#vars+1] = function(env,val,cont,i) 
+        quickApp:internalStorageSet(var,val)
+        cont(i)
+      end
+    else
+      error(\"Not implemented: \"..tostring(v.vt))
+    end
+    elseif v.type == 'aref' then
+      local var = {tab=compa(v.tab), idx=v.idx}
+      if type(var.idx) == 'table' then var.idx = compa(v.idx) end
+      vars[#vars+1] = function(env,val,cont,i) --{type='aref',tab=compa(v.tab), idx=v.idx}
+        var.tab(function(tab)
+          if isCont(var.idx) then
+            var.idx(function(idx)
+              tab[idx] = val
+              cont(i)
+            end,env)
+          else
+            tab[v.idx] = val
+            cont(i)
+          end
+        end,env)
+      end
+    elseif v.type == 'getprop' then
+      local var = {obj=compa(v.obj), prop=v.prop}
+      vars[#vars+1] = function(env,val,cont,i)
+        var.obj(function(obj)
+          ER.executeSetProp(obj,var.prop,val,env)
+          cont(i)
+        end,env)
+      end
+    else
+      error(\"Not supported assignment: \"..tostring(v.type))
+    end
+  end
+  return ASSIGNM(vars, exprs)
+end
+
+function comp.incvar(expr) 
+  if isHead then compError(\"'var incremental' not allowed in trigger expression\",expr) end
+  return INCVAR(expr.name,expr.op,compa(expr.value)) 
+end
+
+function comp.getprop(expr) return GETPROP(expr.prop,compa(expr.obj)) end
+
+local function makeVarAssign(var) return function(env,val,cont,i) env:setVariable(var,val) cont(i) end end
+
+function comp.functiondef(expr)
+  if isHead then compError(\"'function definition' not allowed in trigger expression\",expr) end
+  local fun = compa(expr.fun)
+  return ASSIGNM({makeVarAssign(expr.name[1])},{fun})
+end
+
+comp['function'] = function(expr)
+  local fun = compa(expr.body)
+  return FRAME(FUNC(expr.params, fun))
+end
+
+comp['functionexpr'] = function(expr) return compa(expr.fun) end
+
+comp['varargstable'] = function(expr) return VARARGSTABLE() end
+
+function compa(expr)
+  if comp[expr.type] then return comp[expr.type](expr)
+  else error(\"Not implemented:\"..tostring(expr.type)) end
+end
+
+function compile(ast)
+  if ast.type == 'block' then
+    return comp.block(ast,false)
+  elseif ast.type == 'ruledef' then
+    local head = ast.head
+    local body = ast.body
+    isHead = true
+    local h = compa(head)
+    isHead = false
+    local b = compa(body)
+    return IF(RULECHECK(h),b)
+  else error(\"Not implemented:\"..tostring(ast.type)) end
+end
+
+local function eval(str,opts)
+  assert(type(str) == \"string\",\"Expected string\")
+  currentSrc = str
+  opts = opts or {}
+  local isRule = false
+  local stat,ast = xpcall(function()
+    local tkns = ER.tokenize(str)
+    if opts.tokens then tkns.dump() end
+    if tkns.containsType('t_rule') then
+      table.insert(tkns.stream,1,{type='t_rulebegin',dbg={from=0,to=0}})
+      table.insert(tkns.stream,{type='t_ruleend',dbg={from=0,to=0}})
+      isRule = true
+    end
+    ast,j,k = ER.parse(tkns)
+    return ast
+  end,function(e)
+    if fibaro.plua then 
+      local info = debug.getinfo(2)
+       dbg = debug.traceback()
+    end
+    return e
+  end)
+  if not stat then fibaro.error(__TAG,fmt(\"%s %s\",\"❌\",tostring(ast))) return idfun end
+  if opts.tree then print(json.encodeFormated(ast)) end
+  locals = nil
+    local cstat,res = pcall(function()
+    local cont = compile(ast)
+    opts.src = ast._src
+    return isRule and RULE(cont,opts) or EXPR(cont,opts)
+  end)
+  if not cstat then print(res) return idfun else return res end
+end
+
+ER.compile = compile
+ER.eval = eval
+ER.ASYNCFUN = ASYNCFUN
+ER.COMPFUNS = funs","isMain":false,"isOpen":false}],"initialInterfaces":[],"initialProperties":{"apiVersion":"1.3","buildNumber":1,"deviceRole":"Other","quickAppUuid":"f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c","quickAppVariables":[],"supportedDeviceRoles":["Other"],"typeTemplateInitialized":true,"uiCallbacks":[],"uiView":[{"type":"horizontal","components":[{"type":"label","name":"info","style":{"weight":"1.0"},"text":"EventRunnner 6","visible":true}],"style":{"weight":"1.0"}}],"useEmbededView":true,"useUiView":true,"userDescription":"","viewLayout":{"$jason":{"body":{"header":{"style":{"height":"0"},"title":"quickApp_device_52"},"sections":{"items":[{"type":"vertical","components":[{"type":"label","name":"info","style":{"weight":"1.2"},"text":"EventRunnner 6","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}}]}},"head":{"title":"quickApp_device_52"}}}}}
