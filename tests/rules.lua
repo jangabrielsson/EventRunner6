@@ -167,10 +167,15 @@ function QuickApp:main(er)
   --   for id,val in pairs(state) do id:value=val end
   -- ]])
   
-  rule("noderedURL='http://192.168.1.248:1880/endpoint/ER_HC3'")
-  rule("nr.post(#echo1)")
-  rule("#echo => log('Echo event received: %s',77)")
+  -- rule("noderedURL='http://192.168.1.248:1880/endpoint/ER_HC3'")
+  -- rule("nr.post(#echo1)")
+  -- rule("#echo => log('Echo event received: %s',77)")
   
+  rule("#foo => log('a'); wait(00:00:02); flog('b')")
+  rule("post(#foo)")
+
+  rule("#rule-error{message='$msg',rule='$rule'} => log('Error captured: %s',msg)") 
+
   --var.test = {SWITCH = var.HT.kitchen.light.roof }
   -- rule("AI_speakers = '192.168.1.239'")
   -- rule("log('AI_speakers=%s',AI_speakers)")

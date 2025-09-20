@@ -142,7 +142,7 @@ function ER.customDefs(er)
       if cb.env.waited then cb.env.waited(cb.env.rule,cb.env,time) end
       cb(true) 
     end, 
-    time*1000)
+    (time-ER.now())*1000)
     return -1 -- not async
   end
 
