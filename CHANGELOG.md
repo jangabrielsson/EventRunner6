@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.0.42] - 2025-09-21
+
+## Changes in v0.0.42
+
+- ♻️ **Refactor**: improve error handling in property resolution
+- ♻️ **Refactor**: update loadDevice function path for consistency
+- ✨ **Feature**: add Node-RED integration support
+- ♻️ **Refactor**: clean up IP address retrieval logic
+- ♻️ **Refactor**: simplify Node-RED event handling
+- 📚 **Docs**: create release notes for v0.0.41
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.41] - 2025-09-20
 
 ## Changes in v0.0.41
