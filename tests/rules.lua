@@ -17,10 +17,10 @@ function ding(id)
 end
 
 local _,_ = api.post("/globalVariables/",{name="GV1",value="0"})
-
+-- /Users/jangabrielsson/Desktop/Fibaro/plua/examples/fibaro/stdQAs/alarmPartition.lua
 function QuickApp:main(er)
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
-  local function loadDevice(name) return er.loadSimDevice("/Users/jangabrielsson/Documents/dev/plua_new/plua/examples/fibaro/stdQAs/"..name..".lua") end
+  local function loadDevice(name) return er.loadSimDevice("/Users/jangabrielsson/Desktop/Fibaro/plua/examples/fibaro/stdQAs/"..name..".lua") end
   er.opts = { started = false, check = true, result = false, triggers=true, } --nolog=true }
   
   function var.click(id,val) 
@@ -36,8 +36,8 @@ function QuickApp:main(er)
     fake = 5675675,
     kitchen = {
       light = {
-        -- roof = loadDevice("binarySwitch"),
-        -- window =  loadDevice("multilevelSwitch"),
+        roof = loadDevice("binarySwitch"),
+        window =  loadDevice("multilevelSwitch"),
       }
     }
   }
@@ -168,9 +168,9 @@ function QuickApp:main(er)
   --   for id,val in pairs(state) do id:value=val end
   -- ]])
   
-  rule("noderedURL='http://192.168.1.248:1880/endpoint/ER_HC3'")
-  rule("nr.post(#echo1)")
-  rule("#echo => log('Echo event received: %s',77)")
+  -- rule("noderedURL='http://192.168.1.248:1880/endpoint/ER_HC3'")
+  -- rule("nr.post(#echo1)")
+  -- rule("#echo => log('Echo event received: %s',77)")
   
   -- rule("#foo => log('a'); wait(00:00:02); flog('b')")
   -- rule("post(#foo)")
@@ -196,6 +196,10 @@ function QuickApp:main(er)
   -- rule("trueFor(00:00:08, test.SWITCH:isOn) => log('xx is true for 5 sec')")
   -- rule("test.SWITCH:on; wait(00:00:07); test.SWITCH:off")
 
+  rule("lights = {a = HT.kitchen.light.roof, HT.kitchen.light.window}")
+  --rule("lights:isOff => log('All lights are off')")
+  -- rule("HT.kitchen.light.roof:on; wait(1); HT.kitchen.light.roof:off")
+  rule("lights:on; wait(1); lights:off")
 end
 
 --%%time:2025/01/01 09:00:00

@@ -289,6 +289,11 @@ local function resolvePropObject(obj)
   else return nil end
 end
 
+local function dumpTable(obj)
+  local r = {} for k,v in pairs(obj) do r[#r+1]=string.format("%s=%s",tostring(k),tostring(v)) end
+  return "{"..table.concat(r,",").."}"
+end
+
 local function executeGetProp(obj,prop,env)
   if type(obj) == 'table' then
     if next(obj) == nil then return env.error("Expected non-empty table, got empty table") end
@@ -308,7 +313,10 @@ local function executeGetProp(obj,prop,env)
     end
     local red,res = fo:hasReduce(prop)
     if red then 
-      res = red(function(v) return v:_getProp(prop,env) end,r)
+      res = red(function(v) 
+        if not v then return env.error("Not a proper table: "..dumpTable(obj)) 
+        else return v:_getProp(prop,env) end
+      end,r)
     else res = table.map(function(v) return v:_getProp(prop,env) end,r) end
     return res
   else
