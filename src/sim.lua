@@ -125,7 +125,8 @@ end
 if fibaro.plua then
   local id = 10000
   local function createDevice(path)
-    local code = fibaro.plua.lib.readFile(path)
+    local p = os.getenv("DEVICELIB") or ""
+    local code = fibaro.plua.lib.readFile(p..path)
     local d = fibaro.plua.lib.loadQAString(code,{headers={"desktop:false"}})
     return d.device.id
   end

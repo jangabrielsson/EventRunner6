@@ -329,7 +329,12 @@ end
 
 local function executeSetProp(obj,prop,value,env)
   if type(obj) == 'table' then
-    if #obj == 0 then return env.error("Expected non-empty table, got empty table") end
+    if #obj == 0 then 
+      if next(obj) ~= nil then 
+        return env.error("Expected array, got key-value table: "..dumpTable(obj)) 
+      end
+      return env.error("Expected non-empty table, got empty table") 
+    end
     for _,v in pairs(obj) do
       local v = resolvePropObject(v)
       if not v then return env.error("Not a prop object: "..tostring(v)) end
