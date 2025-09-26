@@ -86,7 +86,7 @@ generate_forum_post() {
     
     <div>
         <button class="copy-button" onclick="copyToClipboard()">📋 Copy Forum Post</button>
-        <a href="https://forum.fibaro.com/topic/23406-eventrunner-writing-scripts-for-hc2hc3-since-2018/" class="forum-link" target="_blank">🌐 Open Fibaro Forum Thread</a>
+        <a href="https://forum.fibaro.com/topic/79165-eventrunner-6/" class="forum-link" target="_blank">🌐 Open Fibaro Forum Thread</a>
     </div>
     
     <div class="post-content" id="forumPost">
