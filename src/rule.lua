@@ -104,7 +104,7 @@ local function ruleWrapper(rule)
 end
 
 local function createRule(expr, data, opts)
-  local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src }
+  local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src, _name = opts.name and (" "..opts.name) or nil}
   local timers = {}
   local opts = opts or {}
   opts = table.copyShallow(opts)
