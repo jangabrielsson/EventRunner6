@@ -1,5 +1,26 @@
 # Changelog
 
+## [v0.0.43] - 2025-09-26
+
+## Changes in v0.0.43
+
+- ♻️ **Refactor**: add optional name property to rule creation
+- ♻️ **Refactor**: improve clarity of rule data structure
+- ✨ **Feature**: WIP: local changes before rebase
+- ✨ **Feature**: add wnum function to computed variables
+- ♻️ **Refactor**: clean up GVAR function by removing commented code
+- 🧪 **Test**: add initial test file for array functions
+- ♻️ **Refactor**: update rule syntax for logging with wnum
+- ♻️ **Refactor**: enhance rule string representation
+- ♻️ **Refactor**: improve rule index handling
+- ♻️ **Refactor**: enhance error handling in executeSetProp function
+- ♻️ **Refactor**: update device creation path handling in createDevice function
+- ♻️ **Refactor**: update rule execution logic for clarity
+- ♻️ **Refactor**: comment out unused rule definitions
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.42] - 2025-09-21
 
 ## Changes in v0.0.42
