@@ -44,7 +44,11 @@ ER.T2020 = T2020
 local function mkEvent(ev) return setmetatable(ev, ER.EventMT) end
 
 local RuleMT = {
-  __tostring = function(r) return fmt("[Rule:%d]", r.id) end,
+  __tostring = function(r) return fmt("[Rule:%d%s]", r.id, r._name or "") end,
+  __index = function(r,k)
+    if k == 'short' then return fmt("%s %s",r,r.src // 80):gsub("%s*\n%s*"," ") end
+    return rawget(r,k)
+  end,
 }
 
 local function started_rule(rule, env, event) 
@@ -91,7 +95,10 @@ local function ruleWrapper(rule)
   return setmetatable({_rule = rule},{
     __tostring = function(r) return tostring(rule) end,
     __index = function(r,k)
-      if ruleGetVar[k] then return (rule or {})[k] elseif ruleSetFun[k] then return function(...) if rule then rule[k](rule,...) end return r end end
+      if ruleGetVar[k] then return (rule or {})[k] elseif ruleSetFun[k] then 
+        return function(_,...) 
+          if r then rule[k](rule,...) end return r end 
+        end
     end,
   })
 end
@@ -254,8 +261,9 @@ local function createRule(expr, data, opts)
     if event and event._df then self:setupDaily(false) end
   end
 
+  function self:name(name) self._name = " "..name end
+
   setmetatable(self, RuleMT)
-  self.short = fmt("%s %s",self,self.src // 80):gsub("%s*\n%s*"," ")
   return ruleWrapper(self)
 end
 
