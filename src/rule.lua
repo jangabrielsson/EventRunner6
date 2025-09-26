@@ -500,8 +500,19 @@ function createER(qa)
     __index = function(t,k) return  _er.variables[k] end,
     __newindex = function(t,k,v) ER.triggerVars[k]=true _er.variables[k] = v end
   })
-  function _er.rule(str,opts)
+  function _er.rule(...)
+    local args = {...}
+    local str = args[1]
+    local opts = args[2] 
+    if type(str)=='string' and type(opts)=='string' then
+      str,opts = args[2],args[3]
+      opts = opts or {}
+      assert(type(opts)=='table',"Options must be a table")
+      opts.name = args[1]
+    end
     opts = opts or {}
+    assert(type(str)=='string',"First argument must be a rule string")
+    assert(type(opts)=='table',"Options must be a table")
     for k,v in pairs(_er.opts or {}) do if opts[k] == nil then opts[k] = v end end 
     opts.env = opts.env or RuleEnv
     return ER.eval(str,opts)() 
