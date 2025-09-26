@@ -1,0 +1,1 @@
+local function fun(args) end

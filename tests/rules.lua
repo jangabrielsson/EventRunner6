@@ -172,7 +172,7 @@ function QuickApp:main(er)
   -- rule("nr.post(#echo1)")
   -- rule("#echo => log('Echo event received: %s',77)")
   
-  rule("#foo => log('a'); wait(00:01); log('b')")
+  rule("my Rule","#foo => log('<%s>',wnum); wait(00:01); log('b')")
   rule("post(#foo)")
 
   -- rule("#rule-error{message='$msg',rule='$rule'} => log('Error captured: %s',msg)") 

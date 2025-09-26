@@ -87,6 +87,7 @@ function ER.customDefs(er)
     local rule,var = er.rule,er.variables
 
     ER.computedVar.now = ER.now
+    ER.computedVar.wnum = function() return tonumber(os.date("%V",os.time())) end
 
     function var.async.trueFor(cb,time,expr)
     local trueFor = cb.env.rule.trueFor or {}
