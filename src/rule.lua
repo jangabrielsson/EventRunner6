@@ -1,4 +1,4 @@
-local VERSION = "0.0.43"
+local VERSION = "0.0.44"
 
 fibaro.EventRunner = fibaro.EventRunner or { debugFlags = {} }
 local ER = fibaro.EventRunner

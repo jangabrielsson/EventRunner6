@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.44] - 2025-09-26
+
+## Changes in v0.0.44
+
+- ♻️ **Refactor**: simplify rule metatable indexing
+- ✨ **Feature**: add short representation for rules
+- ✨ **Feature**: update forum link in post generator
+- ♻️ **Refactor**: improve HTML structure for forum post generation
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.43] - 2025-09-26
 
 ## Changes in v0.0.43
