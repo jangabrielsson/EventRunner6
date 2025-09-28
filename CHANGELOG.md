@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.46] - 2025-09-28
+
+## Changes in v0.0.46
+
+- 🐛 **Fix**: correct logic in rule definition check
+- 🐛 **Fix**: correct type check for defined option in rule setup
+- ♻️ **Refactor**: improve readability of rule definition logic
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.45] - 2025-09-28
 
 ## Changes in v0.0.45
