@@ -299,7 +299,7 @@ local function defRule(expr, opts)
   rule._rule:setupInterval()
   Rules[#Rules+1] = rule._rule
   if opts.defined then
-    if type(opts.defined == 'func'..'tion' then
+    if type(opts.defined) == 'func'..'tion' then
       local stat,res = pcall(opts.defined,rule)
       if stat and res return end
     end
