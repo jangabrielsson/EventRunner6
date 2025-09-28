@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.45] - 2025-09-28
+
+## Changes in v0.0.45
+
+- ✨ **Feature**: add logging for rule definition events
+- ♻️ **Refactor**: update rule representation to include name property
+- 📚 **Docs**: create release notes for v0.0.44
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.44] - 2025-09-26
 
 ## Changes in v0.0.44
