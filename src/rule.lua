@@ -44,7 +44,7 @@ ER.T2020 = T2020
 local function mkEvent(ev) return setmetatable(ev, ER.EventMT) end
 
 local RuleMT = {
-  __tostring = function(r) return fmt("[Rule:%d%s]", r.id, r._name or "") end,
+  __tostring = function(r) return fmt("[Rule:%d%s]", r.id, r.name and (" "..r.name) or "") end,
   -- __index = function(r,k)
   --   if k == 'short' then return fmt("%s %s",r,r.src // 80):gsub("%s*\n%s*"," ") end
   --   return rawget(r,k)
@@ -89,8 +89,9 @@ local function flatten(t)
   end
 end
 
-local ruleGetVar = { id = true, src = true }
-local ruleSetFun = { name = true, enable = true, disable = true, start = true }
+local ruleGetVar = { id = true, src = true, name = true, disabled = true }
+--local ruleSetVar = { id = true, src = true, name = true, disabled = true }
+local ruleSetFun = { enable = true, disable = true, start = true }
 local function ruleWrapper(rule)
   return setmetatable({_rule = rule},{
     __tostring = function(r) return tostring(rule) end,
@@ -104,7 +105,7 @@ local function ruleWrapper(rule)
 end
 
 local function createRule(expr, data, opts)
-  local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src, _name = opts.name and (" "..opts.name) or nil}
+  local self = { id = data.id, triggers = data.triggers, daily = data.daily, interval = data.interval, src = opts.src, name = opts.name}
   local timers = {}
   local opts = opts or {}
   opts = table.copyShallow(opts)
@@ -255,13 +256,12 @@ local function createRule(expr, data, opts)
     env.eventId = id
     matchvars = matchvars or {}
     matchvars.env = {event = event, p = matchvars}
+    matchvars.rule = self
     env.locals = matchvars
     if opts.started then opts.started(self,env,event) end
     expr(opts.cont,env)
     if event and event._df then self:setupDaily(false) end
   end
-
-  function self:name(name) self._name = " "..name end
 
   setmetatable(self, RuleMT)
   self.short = fmt("%s %s",self,self.src // 80):gsub("%s*\n%s*"," ")
@@ -298,7 +298,13 @@ local function defRule(expr, opts)
   rule._rule:setupDaily(true)
   rule._rule:setupInterval()
   Rules[#Rules+1] = rule._rule
-  printf("%s %s",rule._rule.ruleDefPrefix,rule._rule.short)
+  if opts.defined then
+    if type(opts.defined == 'func'..'tion' then
+      local stat,res = pcall(opts.defined,rule)
+      if stat and res return end
+    end
+    printf("%s %s",rule._rule.ruleDefPrefix,rule._rule.short)
+  end
   return rule
 end
 
@@ -515,6 +521,7 @@ function createER(qa)
     assert(type(str)=='string',"First argument must be a rule string")
     assert(type(opts)=='table',"Options must be a table")
     for k,v in pairs(_er.opts or {}) do if opts[k] == nil then opts[k] = v end end 
+    if opts.defined == nil then opts.defined = true end
     opts.env = opts.env or RuleEnv
     return ER.eval(str,opts)() 
   end

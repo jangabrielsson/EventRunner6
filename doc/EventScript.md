@@ -880,6 +880,7 @@ er.opts = {
     triggers = boolean,         -- list triggers when rule defined
     waiting = boolean/function, -- true => system waiting log, alt. user function(rule,env,time)
     waited = boolean/function,  -- true => system waited log, alt. user function(rule,env,time)
+    defined = boolean/function,  -- true => log rule defined, alt. user function(rule)
     ruleDefPrefix = "✅",       -- prefix string for rule defined result
     triggerListPrefix = "⚡",    -- prefix string for listed rule triggers
     dailyListPrefix = "🕒",     -- prefix string for listed rule dailys
