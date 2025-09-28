@@ -301,7 +301,7 @@ local function defRule(expr, opts)
   if opts.defined then
     if type(opts.defined) == 'func'..'tion' then
       local stat,res = pcall(opts.defined,rule)
-      if stat and res return end
+      if stat and res then return end
     end
     printf("%s %s",rule._rule.ruleDefPrefix,rule._rule.short)
   end
