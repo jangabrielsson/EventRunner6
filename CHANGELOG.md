@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.47] - 2025-09-30
+
+## Changes in v0.0.47
+
+- ✨ **Feature**: Remove .env from tracking
+- 🐛 **Fix**: add nil and empty table checks in trigger function
+- 🐛 **Fix**: update vremote initialization for rule testing
+- ✨ **Feature**: add .env configuration for device library path
+- ♻️ **Refactor**: simplify loadDevice function in rules.lua
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.46] - 2025-09-28
 
 ## Changes in v0.0.46
