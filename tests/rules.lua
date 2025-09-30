@@ -20,7 +20,7 @@ local _,_ = api.post("/globalVariables/",{name="GV1",value="0"})
 -- /Users/jangabrielsson/Desktop/Fibaro/plua/examples/fibaro/stdQAs/alarmPartition.lua
 function QuickApp:main(er)
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
-  local function loadDevice(name) return er.loadSimDevice("/Users/jangabrielsson/Desktop/Fibaro/plua/examples/fibaro/stdQAs/"..name..".lua") end
+  local function loadDevice(name) return er.loadSimDevice(name..".lua") end
   er.opts = { defined = true, started = false, check = true, result = false, triggers=true, no_expr_result=true} --nolog=true }
   
   function var.click(id,val) 
@@ -175,9 +175,20 @@ function QuickApp:main(er)
   -- rule("my Rule","#foo => log('<%s>',wnum); wait(00:01); log('b')")
   -- rule("post(#foo)")
 
-  rule("#foo => wait(00:00:10); log('Starting rule %s',rule.id)", {name="Test rule"})
-  rule("log('Hupp')")
-  rule("return 5+5",{no_expr_result=true}) -- Just to test no_expr_result
+  -- rule("#foo => wait(00:00:10); log('Starting rule %s',rule.id)", {name="Test rule"})
+  -- rule("log('Hupp')")
+  -- rule("return 5+5",{no_expr_result=true}) -- Just to test no_expr_result
+
+  vremote = 99
+  rule([[vremote:key =>
+    local key = vremote:key; 
+    case
+     || key == '1:Pressed' >> hL.index = stepUp(hL.index, tS); hL.devices:value = nextValue(hL.index, hL.curve, hL.low, hL.high, tS)
+     || key == '2:Pressed' >> hL.index = stepDown(hL.index, tS); hL.devices:value = nextValue(hL.index, hL.curve, hL.low, hL.high, tS)
+     || key == '1:HeldDown' >> hL.devices:on; log('isOn hL'); hL.index = currentStep(hL.devices[1]:value, hL.curve, hL.low, hL.high, tS)
+    || key == '2:HeldDown' >> hL.devices:off
+end
+]])
 
   -- rule("#rule-error{message='$msg',rule='$rule'} => log('Error captured: %s',msg)") 
 
