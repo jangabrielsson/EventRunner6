@@ -179,8 +179,8 @@ function QuickApp:main(er)
   -- rule("log('Hupp')")
   -- rule("return 5+5",{no_expr_result=true}) -- Just to test no_expr_result
 
-  vremote = 99
-  rule([[vremote:key =>
+  vremote = nil
+  rule([[{}:key =>
     local key = vremote:key; 
     case
      || key == '1:Pressed' >> hL.index = stepUp(hL.index, tS); hL.devices:value = nextValue(hL.index, hL.curve, hL.low, hL.high, tS)

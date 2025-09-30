@@ -357,6 +357,8 @@ function findTriggers(c, cont, env, df)
       return scanArg(cont, env, df, obj)
     end
     obj(function(values)
+      if values == nil then env.error(fmt("getprop object is nil: %s %s",prop,tostring(obj))) end
+      if type(values) == 'table' and next(values)==nil then env.error(fmt("getprop object is empty table: %s %s",prop,tostring(obj))) end
       if not(type(values) == 'table' and not values._isPropObject) then values = {values} end
       for _,o in ipairs(values) do
         local obj = ER.resolvePropObject(o)
