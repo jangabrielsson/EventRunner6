@@ -423,6 +423,7 @@ end
 local function GETPROP(prop,obj)
   return CONT(function(cont,env)
     obj(function(o)
+      if o == nil then return env.error("Not a prop object: "..tostring(obj)) end
       local res = ER.executeGetProp(o,prop,env)
       cont(res)
     end,env)
@@ -861,6 +862,7 @@ function comp.assign(expr)
       local var = {obj=compa(v.obj), prop=v.prop}
       vars[#vars+1] = function(env,val,cont,i)
         var.obj(function(obj)
+          if obj == nil then return env.error("Not a prop object: "..tostring(var.obj)) end
           ER.executeSetProp(obj,var.prop,val,env)
           cont(i)
         end,env)

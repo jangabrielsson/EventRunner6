@@ -180,14 +180,8 @@ function QuickApp:main(er)
   -- rule("return 5+5",{no_expr_result=true}) -- Just to test no_expr_result
 
   vremote = nil
-  rule([[{}:key =>
-    local key = vremote:key; 
-    case
-     || key == '1:Pressed' >> hL.index = stepUp(hL.index, tS); hL.devices:value = nextValue(hL.index, hL.curve, hL.low, hL.high, tS)
-     || key == '2:Pressed' >> hL.index = stepDown(hL.index, tS); hL.devices:value = nextValue(hL.index, hL.curve, hL.low, hL.high, tS)
-     || key == '1:HeldDown' >> hL.devices:on; log('isOn hL'); hL.index = currentStep(hL.devices[1]:value, hL.curve, hL.low, hL.high, tS)
-    || key == '2:HeldDown' >> hL.devices:off
-end
+  rule([[
+    @now+1 => HT.fopp:on
 ]])
 
   -- rule("#rule-error{message='$msg',rule='$rule'} => log('Error captured: %s',msg)") 

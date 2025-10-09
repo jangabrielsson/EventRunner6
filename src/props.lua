@@ -306,10 +306,10 @@ local function executeGetProp(obj,prop,env)
 
     local r,fo = {},nil
     for k,v in pairs(obj) do
-      local v = resolvePropObject(v)
-      fo = fo or v
-      if not v then return env.error("Not a prop object: "..tostring(v)) end
-      r[k] = v
+      local v0 = resolvePropObject(v)
+      fo = fo or v0
+      if not v0 then return env.error("Not a prop object: "..tostring(v)) end
+      r[k] = v0
     end
     local red,res = fo:hasReduce(prop)
     if red then 
@@ -322,7 +322,7 @@ local function executeGetProp(obj,prop,env)
   else
     if ER.propFilters[prop] then return ER.propFilters[prop](obj, env.trigger) end
     local v = resolvePropObject(obj)
-    if not v then return env.error("Not a prop object: "..tostring(v)) end
+    if not v then return env.error("Not a prop object: "..tostring(obj)) end
     return v:_getProp(prop,env)
   end
 end
@@ -336,13 +336,13 @@ local function executeSetProp(obj,prop,value,env)
       return env.error("Expected non-empty table, got empty table") 
     end
     for _,v in pairs(obj) do
-      local v = resolvePropObject(v)
-      if not v then return env.error("Not a prop object: "..tostring(v)) end
-      v:_setProp(prop,value,env)
+      local v0 = resolvePropObject(v)
+      if not v0 then return env.error("Not a prop object: "..tostring(v)) end
+      v0:_setProp(prop,value,env)
     end
   else
     local v = resolvePropObject(obj)
-    if not v then return env.error("Not a prop object: "..tostring(v)) end
+    if not v then return env.error("Not a prop object: "..tostring(obj)) end
     v:_setProp(prop,value,env)
   end
 end
