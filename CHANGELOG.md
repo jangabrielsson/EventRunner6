@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.0.48] - 2025-10-09
+
+## Changes in v0.0.48
+
+- ✨ **Feature**: Add space+dev directory to gitignore
+- 🐛 **Fix**: add nil checks for prop objects in get/set functions
+- 🐛 **Fix**: improve error messages for invalid prop objects
+- ✨ **Feature**: add release notes for v0.0.47
+- 🐛 **Fix**: include nil and empty table checks in trigger function
+- 🐛 **Fix**: update vremote initialization for rule testing
+- ✨ **Feature**: add .env configuration for device library path
+- ♻️ **Refactor**: simplify loadDevice function in rules.lua
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.47] - 2025-09-30
 
 ## Changes in v0.0.47
