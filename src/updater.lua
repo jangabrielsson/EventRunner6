@@ -4,8 +4,9 @@
 --%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c
 --%%save:dist/ERUpdater.fqa
 --%%u:{label='l1', text="ER Updater"}
---%%u:{select='version', options={}, onToggled='versionSelected'}
---%%u:{select='qa', options={}, onToggled='qaSelected'}
+--%%u:{select='qaList', options={}, onToggled='qaList'}
+--%%u:{select='qaVersion', options={}, onToggled='qaVersion'}
+--%%u:{select='qaInstance', options={}, onToggled='qaInstance'}
 --%%u:{label='sel', text=''}
 --%%u:{{button='upd', text="Update", onReleased='updateClicked'},{button='ref', text="Refresh", onReleased='refreshClicked'},{button='install', text="Install", onReleased='installClicked'}}
 --%%u:{label='msg', text=''}
@@ -15,8 +16,48 @@ local VERSION = "0.0.48"
 local ER_UUID = "f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c"
 local fmt = string.format
 
+class "QAList"(Selectable)
+function QAList:__init(qa) Selectable.__init(self,qa,"qaList") end
+function QAList:text(item) return item.name end. -- { name=..., path=..., uid=...}
+function QAList:value(item) return item.uid end
+function QAList:sort(a,b) return a.name < b.name end -- sort list by name
+function QAList:selected(item)  -- select QA device struct
+  
+  self:git_getQATags('jangabrielsson',item.name,function(ok,data)
+    local vers = {{type'option', text="---", value=""}}
+    if ok then
+      local tags = json.decode(data)
+      for _,t in ipairs(tags) do 
+        vers[#vers+1] = {type='option', text=t.name, value=t.name} 
+      end
+    end
+    self.qa:updateView('version','options',vers)
+  end)
+  self.qa.QAversions:update(vars)
+  self.qa:updateView("value","text","")
+end
+
+class "QAversions"(Selectable)
+function QAVars:__init(qa) Selectable.__init(self,qa,"qaVersion") end
+function QAVars:text(item) return item.name end
+function QAVars:value(item) return item.name end
+function QAVars:sort(a,b) return a.name < b.name end
+function QAVars:selected(item) -- {name=.., value=...} item selected 
+  self.qa:updateView("value","text",tostring(item.value))
+end
+
+class "QAs"(Selectable)
+function QAVars:__init(qa) Selectable.__init(self,qa,"qaInstance") end
+function QAVars:text(item) return item.name end
+function QAVars:value(item) return item.name end
+function QAVars:sort(a,b) return a.name < b.name end
+function QAVars:selected(item) -- {name=.., value=...} item selected 
+  self.qa:updateView("value","text",tostring(item.value))
+end
+
 function QuickApp:onInit()
   self:debug(self.name,self.id)
+  self:updateView('l1',"text",fmt("QA Manager v%s",VERSION))
   self:updateView('sel',"text","")
   self:updateView('msg',"text","")
   setInterval(function() self:refreshClicked() end, 60*60*1000) -- Refresh every hour
@@ -24,10 +65,18 @@ function QuickApp:onInit()
 end
 
 function QuickApp:refreshClicked()
+  self:git_getRepo(function(ok,data)
+    if not ok then 
+      self:ERROR(self:message("Failed to get QA manifest: %s",data))
+      return
+    end
+    local repos = json.decode(data)
+    print(data)
+  end)
   local res = api.get("/devices?property=[quickAppUuid,"..ER_UUID.."]") or {}
   local ers = {{type='option', text="---", value=""}}
   for _,q in ipairs(res) do ers[#ers+1] = {type='option', text=fmt("%s: %s",q.id,q.name),value=tostring(q.id)} end
-  self:updateView('qa','options',ers)
+  self:updateView('qadev','options',ers)
   self:git_getQATags('jangabrielsson','EventRunner6',function(ok,data)
     local vers = {{type'option', text="---", value=""}}
     if ok then
@@ -40,7 +89,7 @@ function QuickApp:refreshClicked()
   end)
 end
 
-local qa,version = nil,nil
+local qadev,version = nil,nil
 function QuickApp:installClicked()
   if not version then
     self:ERROR("Please select a version")
@@ -64,20 +113,20 @@ end
 
 function QuickApp:versionSelected(ev)
   version = ev.values[1]
-  self:updateView("sel",'text',fmt("Selected: %s / %s",qa or "?",version or "?"))
+  self:updateView("sel",'text',fmt("Selected: %s / %s",qadev or "?",version or "?"))
 end
 
-function QuickApp:qaSelected(ev)
-  qa = tonumber(ev.values[1])
-  self:updateView("sel",'text',fmt("Selected: %s / %s",qa or "?",version or "?"))
+function QuickApp:qadevSelected(ev)
+  qadev = tonumber(ev.values[1])
+  self:updateView("sel",'text',fmt("Selected: %s / %s",qadev or "?",version or "?"))
 end
 
 function QuickApp:updateClicked(ev)
-  if not qa or not version then
+  if not qadev or not version then
     self:ERROR(self:message("Please select both EventRunner6 and version"))
     return
   end
-  self:updateMe(qa, nil, version)
+  self:updateMe(qadev, nil, version)
 end
 
 function QuickApp:INFO(...) self:debug(fmt(...)) end
@@ -111,6 +160,18 @@ function QuickApp:updateMe(id, myVersion, toVersion)
       -- Send error response
     end
   end)
+end
+
+function QuickApp:git_getRepo(cb)
+  net.HTTPClient():request("https://raw.githubusercontent.com/jangabrielsson/plua/refs/heads/main/docs/QAs.json",{
+    options = {checkCertificate = false, timeout=20000},
+    success = function(response)
+      if response and response.status == 200 then
+        cb(true,response.data)
+      else cb(false,response and response.status or "nil") end
+    end,
+    error = function(err) cb(false,err) end
+  })
 end
 
 function QuickApp:git_getQA(user,repo,name,tag,cb)
