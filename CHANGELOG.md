@@ -1,5 +1,29 @@
 # Changelog
 
+## [v0.0.49] - 2025-10-17
+
+## Changes in v0.0.49
+
+- ✨ **Feature**: Add universal release scripts for Lua projects
+  - Introduced a new `scripts` directory containing release automation scripts.
+  - Added `project-config.sh` for project-specific settings and `project-config.sh.example` as a template.
+  - Implemented `create-release.sh` for automated release creation, including version bumping, changelog generation, and GitHub release uploads.
+  - Created `setversion.sh` to update version numbers in source files based on configuration.
+  - Developed `forum-post-generator.sh` to generate HTML forum posts for releases.
+  - Enhanced artifact management with customizable build commands and support for multiple artifact types.
+  - Added pre-release and post-release hooks for custom actions during the release process.
+  - Updated documentation in `README.md` to guide users on how to use the new scripts and configure their projects.
+  - Refactored existing scripts to improve error handling and configuration validation.
+- ✨ **Feature**: enhance ERUpdater functionality with QA selection
+- ✨ **Feature**: add QA list, version selection, and instance selection
+- 🐛 **Fix**: update view handling for QA selections
+- ✨ **Feature**: add release notes for v0.0.48
+- 🐛 **Fix**: improve forum post helper layout and functionality
+- 🐛 **Fix**: enhance copy to clipboard feature for forum post
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.48] - 2025-10-09
 
 ## Changes in v0.0.48

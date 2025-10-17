@@ -1,1 +1,294 @@
-{"name":"ERUpdater","type":"com.fibaro.genericDevice","files":[{"isOpen":false,"name":"main","content":"--%%name:ERUpdater\n--%%type:com.fibaro.genericDevice\n--%%desktop:true\n--%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c\n--%%save:dist/ERUpdater.fqa\n\n--%%u:{label='l1', text=\"ER Updater\"}\n\n--%%u:{select='qaList', options={}, onToggled='qaList'}\n--%%u:{select='qaVersion', options={}, onToggled='qaVersion'}\n--%%u:{select='qaInstance', options={}, onToggled='qaInstance'}\n\n--%%u:{label='sel', text=''}\n\n--%%u:{{button='upd', text=\"Update\", onReleased='updateClicked'},{button='ref', text=\"Refresh\", onReleased='refreshClicked'},{button='install', text=\"Install\", onReleased='installClicked'}}\n--%%file:$fibaro.lib.Selectable,selectable\n--%%u:{label='msg', text=''}\n--%% offline:true\n\nlocal VERSION = \"0.0.48\"\nlocal fmt = string.format\n\nlocal function map(f,t) for k,v in pairs(t) do f(v,k) end end\nlocal QATYPE,QATAG,QAID = \"?\",\"?\",\"?\"\n\nQAList = {}\nclass \"QAList\"(Selectable)\nfunction QAList:__init(qa) Selectable.__init(self,qa,\"qaList\") end\nfunction QAList:text(item) return item.name end -- { name=..., path=..., uid=..., ...}\nfunction QAList:value(item) return item.uid end\nfunction QAList:sort(a,b) return a.name < b.name end -- sort list by name\nfunction QAList:selected(item)  -- select QA list item\n  quickApp:git_getQATags('jangabrielsson',item.name,function(ok,data)\n    local tags = {}\n    if ok then\n      local tags0 = json.decode(data)\n      for i=1,5 do local t = tags0[i]; if t==nil then break end tags[#tags+1] = {name=t.name, uid=t.name} end\n    end\n    local devs = api.get(\"/devices?property=[quickAppUuid,\"..item.uid..\"]\") or {}\n    QATYPE,QATAG,QAID = item.name,\"?\",\"?\"\n    quickApp:updateView(\"sel\",\"text\",fmt(\"%s:%s:%s\",QATYPE,QATAG,QAID))\n    self.qa.QAversions:update(tags)\n    self.qa.QAinstance:update(devs)\n  end)\n\nend\n\nQAversions = {}\nclass \"QAversions\"(Selectable)\nfunction QAversions:__init(qa) Selectable.__init(self,qa,\"qaVersion\") end\nfunction QAversions:text(item) return item.name end\nfunction QAversions:value(item) return item.uid end\nfunction QAversions:sort(a,b) return a.name >= b.name end\nfunction QAversions:selected(item) -- {name=.., value=...} item selected \n  QATAG = item.name\n  quickApp:updateView(\"sel\",\"text\",fmt(\"%s:%s:%s\",QATYPE,QATAG,QAID))\nend\n\nQAinstance = {}\nclass \"QAinstance\"(Selectable)\nfunction QAinstance:__init(qa) Selectable.__init(self,qa,\"qaInstance\") end\nfunction QAinstance:text(item) return fmt(\"%s:%s (%s)\",item.id,item.name,item.properties.model or \"\") end\nfunction QAinstance:value(item) return item.id end\nfunction QAinstance:sort(a,b) return a.name < b.name end\nfunction QAinstance:selected(item) -- {name=.., value=...} item selected \n  QAID = item.id\n  quickApp:updateView(\"sel\",\"text\",fmt(\"%s:%s:%s\",QATYPE,QATAG,QAID))\nend\n\nfunction QuickApp:onInit()\n  quickApp = self\n  self:debug(self.name,self.id)\n  self:updateView('l1',\"text\",fmt(\"QA Manager v%s\",VERSION))\n\n  self.QAList = QAList(self)\n  self.QAversions = QAversions(self)\n  self.QAinstance = QAinstance(self)\n  self.QAversions:update({})\n  self.QAinstance:update({})\n\n  self:updateView('sel',\"text\",\"\")\n  self:updateView('msg',\"text\",\"\")\n  setInterval(function() self:refreshClicked() end, 60*60*1000) -- Refresh every hour\n  self:refreshClicked()\nend\n\nfunction QuickApp:refreshClicked()\n  self:git_getRepo(function(ok,data)\n    if not ok then \n      self:ERROR(self:message(\"Failed to get QA manifest: %s\",data))\n      return\n    end\n    local repos = json.decode(data)\n    for k,v in pairs(repos) do v.name = k end\n    print(data)\n    print(json.encode(repos))\n    self.QAList:update(repos)\n  end)\nend\n\nlocal qadev,version = nil,nil\nfunction QuickApp:installClicked()\n  if not version then\n    self:ERROR(\"Please select a version\")\n    return\n  end\n  self:git_getQA('jangabrielsson','EventRunner6',\"dist/EventRunner6.fqa\",version,function(ok,data)\n    if not ok then \n      self:ERROR(self:message(\"Failed to get EventRunner6 v%s\",version))\n      return\n    end\n    data = json.decode(data)\n    local res,code = api.post(\"/quickApp/\",data)\n    if code > 202 then \n      self:ERROR(self:message(\"Failed to install EventRunner6 %s %s\",version,data))\n    else\n      self:INFO(self:message(\"Installed EventRunner6 v%s as ID %s.\",version,res.id))\n      self:refreshClicked()\n    end\n  end)\nend\n\nfunction QuickApp:versionSelected(ev)\n  version = ev.values[1]\n  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qadev or \"?\",version or \"?\"))\nend\n\nfunction QuickApp:qadevSelected(ev)\n  qadev = tonumber(ev.values[1])\n  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qadev or \"?\",version or \"?\"))\nend\n\nfunction QuickApp:updateClicked(ev)\n  if not qadev or not version then\n    self:ERROR(self:message(\"Please select both EventRunner6 and version\"))\n    return\n  end\n  self:updateMe(qadev, nil, version)\nend\n\nfunction QuickApp:INFO(...) self:debug(fmt(...)) end\nfunction QuickApp:ERROR(...) self:error(fmt(...)) end\n\nfunction QuickApp:updateMe(id, myVersion, toVersion)\n  local id = tonumber(id)\n  if id == nil then\n    self:error(\"No valid EventRunner6 ID\")\n    return\n  end\n  self:git_getQA('jangabrielsson','EventRunner6',\"dist/EventRunner6.fqa\",toVersion,function(ok,data)\n    if ok then\n      self:INFO(self:message(\"Found version v%s\", toVersion))\n      local fqa = json.decode(data)\n      local files,main = fqa.files,nil\n      for i,f in ipairs(files) do if f.isMain then main = i break end end\n      if not main then\n        self:ERROR(self:message(\"No main file found in EventRunner6 v%s\",toVersion))\n        return\n      end\n      table.remove(files,main) -- skip main\n      local res,code = api.put(\"/quickApp/\"..id..\"/files\", files)\n      if code > 202 then\n        self:ERROR(self:message(\"Failed to update EventRunner6 %s files\",toVersion))\n        return\n      end\n      self:INFO(self:message(\"Updated %d files\",#files))\n    else\n      self:ERROR(self:message(\"Failed to get EventRunner6 v%s\",toVersion))\n      -- Send error response\n    end\n  end)\nend\n\nfunction QuickApp:git_getRepo(cb)\n  net.HTTPClient():request(\"https://raw.githubusercontent.com/jangabrielsson/plua/refs/heads/main/docs/QAs.json\",{\n    options = {checkCertificate = false, timeout=20000},\n    success = function(response)\n      if response and response.status == 200 then\n        cb(true,response.data)\n      else cb(false,response and response.status or \"nil\") end\n    end,\n    error = function(err) cb(false,err) end\n  })\nend\n\nfunction QuickApp:git_getQA(user,repo,name,tag,cb)\n  local url = urlencode(fmt(\"%s/%s/%s/%s\",user,repo,tag,name))\n  url = \"https://raw.githubusercontent.com/\"..url\n  net.HTTPClient():request(url,{\n    options = {checkCertificate = false, timeout=20000},\n    success = function(response)\n      if response and response.status == 200 then\n        cb(true,response.data)\n      else cb(false,response and response.status or \"nil\") end\n    end,\n    error = function(err) cb(false,err) end\n  })\nend\n\nfunction QuickApp:git_getQATags(user,repo,cb)\n  local url = fmt(\"https://api.github.com/repos/%s/%s/tags\",user,repo)\n  net.HTTPClient():request(url,{\n    options = {checkCertificate = false, timeout=20000},\n    success = function(response)\n      if response and response.status == 200 then\n        cb(true,response.data)\n      else cb(false,response and response.status or \"nil\") end\n    end,\n    error = function(err) cb(false,err) end\n  })\nend\n\nfunction QuickApp:message(fm,...)\n  local args,str = {...},fm or \"\"\n  if #args > 0 then str = fmt(fm,...) end\n  self:updateView('msg','text',str)\n  return str\nend\n\nfunction urlencode(str) -- very useful\n  if str then\n    str = str:gsub(\"\\n\", \"\\r\\n\")\n    str = str:gsub(\"([^%w %-%_%.%~])\", function(c) return (\"%%%02X\"):format(string.byte(c)) end)\n    str = str:gsub(\" \", \"%%20\")\n  end\n  return str\nend","isMain":true,"type":"lua"},{"isOpen":false,"name":"selectable","content":"------------------ Selectable ------------------\nlocal function mkKey(item) return tostring(item):gsub(\"[^%w]\",\"\") end\nSelectable = Selectable\nclass 'Selectable'\nfunction Selectable:__init(qa,id)\n  local fun = nil\n  assert(type(qa)=='userdata',\"First argument must be the QuickApp (self)\")\n  assert(self.text,\"Selectable:text(item) not defined\")\n  assert(self.value,\"Selectable:value(item) not defined\")\n  for _,c in ipairs(qa.properties.uiCallbacks or {}) do\n    if c.name==id then fun = c.callback break end\n  end\n  assert(fun,\"Selectable \"..tostring(id)..\" not found in uiCallbacks\")\n  self.id = id\n  self.qa = qa\n  self.fun = fun\n  self.qa[fun] = function(_,event)\n    if self.map == nil then\n      return fibaro.warning(__TAG,\"Selectable \"..self.id..\" not initialized\")\n    end\n    self.key = tostring(event.values[1])\n    self.item = self.map[self.key]\n    if self.item == nil then\n      return fibaro.warning(__TAG,\"Selectable: Invalid value: \"..self.key)\n    end\n    self._value = self:value(self.item)\n    if self.selected then\n      self:selected(self.item)\n    end\n  end\nend\nfunction Selectable:update(list)\n  local r = {}\n  for _,item in pairs(list) do\n    if self.filter then \n      if self:filter(item) then table.insert(r,item) end\n    else table.insert(r,item) end\n  end\n  print(json.encode(r))\n  if self.sort then\n    local function sort(a,b) return self:sort(a,b) end\n    table.sort(r,sort) \n  end\n  self.list = r\n  self.map = {}\n  local options = {}\n  for _,item in ipairs(self.list) do\n    local value = mkKey(self:value(item))\n    local name = self:text(item)\n    self.map[value] = item\n    table.insert(options,{text=name,type='option',value=value})\n  end\n  self.options = options\n  --Get around bug that don't update the list if empty\n  if next(options) == nil then options={{text=\"----\",type=\"option\",value=\"\"}} end\n  self:_updateList(\"options\",options)\n  self:_updateList(\"selectedItem\",\"\")\nend\nfunction Selectable:select(value)\n  value = mkKey(value)\n  if not self.map[value] then \n    return fibaro.warning(__TAG,\"Invalid value: \"..value)\n  end\n  self:_updateList(\"selectedItem\",value)\n  self.qa[self.fun](self.qa,{values={value}})\n  self:selected(self.map[value])\nend\n\nfunction Selectable:_updateList(prop,value)\n  self.qa:updateView(self.id,prop,value)\nend","isMain":false,"type":"lua"}],"initialProperties":{"quickAppUuid":"f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c","useUiView":true,"uiView":[{"components":[{"text":"ER Updater","style":{"weight":"1.0"},"visible":true,"name":"l1","type":"label"}],"style":{"weight":"1.0"},"type":"horizontal"},{"components":[{"text":"","style":{"weight":"1.0"},"options":{},"name":"qaList","eventBinding":{"onToggled":[{"params":{"actionName":"UIAction","args":["onToggled","qaList","$event.value"]},"type":"deviceAction"}]},"value":"","visible":true,"selectionType":"single","values":{},"type":"select"}],"style":{"weight":"1.0"},"type":"horizontal"},{"components":[{"text":"","style":{"weight":"1.0"},"options":{},"name":"qaVersion","eventBinding":{"onToggled":[{"params":{"actionName":"UIAction","args":["onToggled","qaVersion","$event.value"]},"type":"deviceAction"}]},"value":"","visible":true,"selectionType":"single","values":{},"type":"select"}],"style":{"weight":"1.0"},"type":"horizontal"},{"components":[{"text":"","style":{"weight":"1.0"},"options":{},"name":"qaInstance","eventBinding":{"onToggled":[{"params":{"actionName":"UIAction","args":["onToggled","qaInstance","$event.value"]},"type":"deviceAction"}]},"value":"","visible":true,"selectionType":"single","values":{},"type":"select"}],"style":{"weight":"1.0"},"type":"horizontal"},{"components":[{"text":"","style":{"weight":"1.0"},"visible":true,"name":"sel","type":"label"}],"style":{"weight":"1.0"},"type":"horizontal"},{"components":[{"text":"Update","style":{"weight":"0.25"},"visible":true,"name":"upd","eventBinding":{"onLongPressDown":[{"params":{"actionName":"UIAction","args":["onLongPressDown","upd"]},"type":"deviceAction"}],"onReleased":[{"params":{"actionName":"UIAction","args":["onReleased","upd"]},"type":"deviceAction"}],"onLongPressReleased":[{"params":{"actionName":"UIAction","args":["onLongPressReleased","upd"]},"type":"deviceAction"}]},"type":"button"},{"text":"Refresh","style":{"weight":"0.25"},"visible":true,"name":"ref","eventBinding":{"onLongPressDown":[{"params":{"actionName":"UIAction","args":["onLongPressDown","ref"]},"type":"deviceAction"}],"onReleased":[{"params":{"actionName":"UIAction","args":["onReleased","ref"]},"type":"deviceAction"}],"onLongPressReleased":[{"params":{"actionName":"UIAction","args":["onLongPressReleased","ref"]},"type":"deviceAction"}]},"type":"button"},{"text":"Install","style":{"weight":"0.25"},"visible":true,"name":"install","eventBinding":{"onLongPressDown":[{"params":{"actionName":"UIAction","args":["onLongPressDown","install"]},"type":"deviceAction"}],"onReleased":[{"params":{"actionName":"UIAction","args":["onReleased","install"]},"type":"deviceAction"}],"onLongPressReleased":[{"params":{"actionName":"UIAction","args":["onLongPressReleased","install"]},"type":"deviceAction"}]},"type":"button"}],"style":{"weight":"1.0"},"type":"horizontal"},{"components":[{"text":"","style":{"weight":"1.0"},"visible":true,"name":"msg","type":"label"}],"style":{"weight":"1.0"},"type":"horizontal"}],"uiCallbacks":[{"callback":"qaList","name":"qaList","eventType":"onToggled"},{"callback":"qaVersion","name":"qaVersion","eventType":"onToggled"},{"callback":"qaInstance","name":"qaInstance","eventType":"onToggled"},{"callback":"updateClicked","name":"upd","eventType":"onReleased"},{"callback":"","name":"upd","eventType":"onLongPressDown"},{"callback":"","name":"upd","eventType":"onLongPressReleased"},{"callback":"refreshClicked","name":"ref","eventType":"onReleased"},{"callback":"","name":"ref","eventType":"onLongPressDown"},{"callback":"","name":"ref","eventType":"onLongPressReleased"},{"callback":"installClicked","name":"install","eventType":"onReleased"},{"callback":"","name":"install","eventType":"onLongPressDown"},{"callback":"","name":"install","eventType":"onLongPressReleased"}],"buildNumber":1,"deviceRole":"Other","typeTemplateInitialized":true,"userDescription":"","supportedDeviceRoles":["Other"],"viewLayout":{"$jason":{"body":{"header":{"title":"quickApp_device_52","style":{"height":"0"}},"sections":{"items":[{"components":[{"visible":true,"name":"l1","style":{"weight":"1.2"},"text":"ER Updater","type":"label"},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}},{"components":[{"visible":true,"name":"qaList","text":"","style":{"weight":"1.2"},"options":{},"selectionType":"single","values":{},"type":"select"},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}},{"components":[{"visible":true,"name":"qaVersion","text":"","style":{"weight":"1.2"},"options":{},"selectionType":"single","values":{},"type":"select"},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}},{"components":[{"visible":true,"name":"qaInstance","text":"","style":{"weight":"1.2"},"options":{},"selectionType":"single","values":{},"type":"select"},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}},{"components":[{"visible":true,"name":"sel","style":{"weight":"1.2"},"text":"","type":"label"},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}},{"components":[{"components":[{"visible":true,"name":"upd","style":{"weight":"0.33"},"text":"Update","type":"button"},{"visible":true,"name":"ref","style":{"weight":"0.33"},"text":"Refresh","type":"button"},{"visible":true,"name":"install","style":{"weight":"0.33"},"text":"Install","type":"button"}],"type":"horizontal","style":{"weight":"1.2"}},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}},{"components":[{"visible":true,"name":"msg","style":{"weight":"1.2"},"text":"","type":"label"},{"type":"space","style":{"weight":"0.5"}}],"type":"vertical","style":{"weight":"1.2"}}]}},"head":{"title":"quickApp_device_52"}}},"quickAppVariables":{},"useEmbededView":true,"apiVersion":"1.3"},"initialInterfaces":{},"apiVersion":"1.3"}
+{"type":"com.fibaro.genericDevice","name":"ERUpdater","apiVersion":"1.3","files":[{"type":"lua","name":"selectable","content":"------------------ Selectable ------------------
+local function mkKey(item) return tostring(item):gsub(\"[^%w]\",\"\") end
+Selectable = Selectable
+class 'Selectable'
+function Selectable:__init(qa,id)
+  local fun = nil
+  assert(type(qa)=='userdata',\"First argument must be the QuickApp (self)\")
+  assert(self.text,\"Selectable:text(item) not defined\")
+  assert(self.value,\"Selectable:value(item) not defined\")
+  for _,c in ipairs(qa.properties.uiCallbacks or {}) do
+    if c.name==id then fun = c.callback break end
+  end
+  assert(fun,\"Selectable \"..tostring(id)..\" not found in uiCallbacks\")
+  self.id = id
+  self.qa = qa
+  self.fun = fun
+  self.qa[fun] = function(_,event)
+    if self.map == nil then
+      return fibaro.warning(__TAG,\"Selectable \"..self.id..\" not initialized\")
+    end
+    self.key = tostring(event.values[1])
+    self.item = self.map[self.key]
+    if self.item == nil then
+      return fibaro.warning(__TAG,\"Selectable: Invalid value: \"..self.key)
+    end
+    self._value = self:value(self.item)
+    if self.selected then
+      self:selected(self.item)
+    end
+  end
+end
+function Selectable:update(list)
+  local r = {}
+  for _,item in pairs(list) do
+    if self.filter then 
+      if self:filter(item) then table.insert(r,item) end
+    else table.insert(r,item) end
+  end
+  print(json.encode(r))
+  if self.sort then
+    local function sort(a,b) return self:sort(a,b) end
+    table.sort(r,sort) 
+  end
+  self.list = r
+  self.map = {}
+  local options = {}
+  for _,item in ipairs(self.list) do
+    local value = mkKey(self:value(item))
+    local name = self:text(item)
+    self.map[value] = item
+    table.insert(options,{text=name,type='option',value=value})
+  end
+  self.options = options
+  --Get around bug that don't update the list if empty
+  if next(options) == nil then options={{text=\"----\",type=\"option\",value=\"\"}} end
+  self:_updateList(\"options\",options)
+  self:_updateList(\"selectedItem\",\"\")
+end
+function Selectable:select(value)
+  value = mkKey(value)
+  if not self.map[value] then 
+    return fibaro.warning(__TAG,\"Invalid value: \"..value)
+  end
+  self:_updateList(\"selectedItem\",value)
+  self.qa[self.fun](self.qa,{values={value}})
+  self:selected(self.map[value])
+end
+
+function Selectable:_updateList(prop,value)
+  self.qa:updateView(self.id,prop,value)
+end","isMain":false,"isOpen":false},{"type":"lua","name":"main","content":"--%%name:ERUpdater
+--%%type:com.fibaro.genericDevice
+--%%desktop:true
+--%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c
+--%%save:dist/ERUpdater.fqa
+
+--%%u:{label='l1', text=\"ER Updater\"}
+
+--%%u:{select='qaList', options={}, onToggled='qaList'}
+--%%u:{select='qaVersion', options={}, onToggled='qaVersion'}
+--%%u:{select='qaInstance', options={}, onToggled='qaInstance'}
+
+--%%u:{label='sel', text=''}
+
+--%%u:{{button='upd', text=\"Update\", onReleased='updateClicked'},{button='ref', text=\"Refresh\", onReleased='refreshClicked'},{button='install', text=\"Install\", onReleased='installClicked'}}
+--%%file:$fibaro.lib.Selectable,selectable
+--%%u:{label='msg', text=''}
+--%% offline:true
+
+^local VERSION = \"0.0.49\"
+local fmt = string.format
+
+local function map(f,t) for k,v in pairs(t) do f(v,k) end end
+local QATYPE,QATAG,QAID = \"?\",\"?\",\"?\"
+
+QAList = {}
+class \"QAList\"(Selectable)
+function QAList:__init(qa) Selectable.__init(self,qa,\"qaList\") end
+function QAList:text(item) return item.name end -- { name=..., path=..., uid=..., ...}
+function QAList:value(item) return item.uid end
+function QAList:sort(a,b) return a.name < b.name end -- sort list by name
+function QAList:selected(item)  -- select QA list item
+  quickApp:git_getQATags('jangabrielsson',item.name,function(ok,data)
+    local tags = {}
+    if ok then
+      local tags0 = json.decode(data)
+      for i=1,5 do local t = tags0[i]; if t==nil then break end tags[#tags+1] = {name=t.name, uid=t.name} end
+    end
+    local devs = api.get(\"/devices?property=[quickAppUuid,\"..item.uid..\"]\") or {}
+    QATYPE,QATAG,QAID = item.name,\"?\",\"?\"
+    quickApp:updateView(\"sel\",\"text\",fmt(\"%s:%s:%s\",QATYPE,QATAG,QAID))
+    self.qa.QAversions:update(tags)
+    self.qa.QAinstance:update(devs)
+  end)
+
+end
+
+QAversions = {}
+class \"QAversions\"(Selectable)
+function QAversions:__init(qa) Selectable.__init(self,qa,\"qaVersion\") end
+function QAversions:text(item) return item.name end
+function QAversions:value(item) return item.uid end
+function QAversions:sort(a,b) return a.name >= b.name end
+function QAversions:selected(item) -- {name=.., value=...} item selected 
+  QATAG = item.name
+  quickApp:updateView(\"sel\",\"text\",fmt(\"%s:%s:%s\",QATYPE,QATAG,QAID))
+end
+
+QAinstance = {}
+class \"QAinstance\"(Selectable)
+function QAinstance:__init(qa) Selectable.__init(self,qa,\"qaInstance\") end
+function QAinstance:text(item) return fmt(\"%s:%s (%s)\",item.id,item.name,item.properties.model or \"\") end
+function QAinstance:value(item) return item.id end
+function QAinstance:sort(a,b) return a.name < b.name end
+function QAinstance:selected(item) -- {name=.., value=...} item selected 
+  QAID = item.id
+  quickApp:updateView(\"sel\",\"text\",fmt(\"%s:%s:%s\",QATYPE,QATAG,QAID))
+end
+
+function QuickApp:onInit()
+  quickApp = self
+  self:debug(self.name,self.id)
+  self:updateView('l1',\"text\",fmt(\"QA Manager v%s\",VERSION))
+
+  self.QAList = QAList(self)
+  self.QAversions = QAversions(self)
+  self.QAinstance = QAinstance(self)
+  self.QAversions:update({})
+  self.QAinstance:update({})
+
+  self:updateView('sel',\"text\",\"\")
+  self:updateView('msg',\"text\",\"\")
+  setInterval(function() self:refreshClicked() end, 60*60*1000) -- Refresh every hour
+  self:refreshClicked()
+end
+
+function QuickApp:refreshClicked()
+  self:git_getRepo(function(ok,data)
+    if not ok then 
+      self:ERROR(self:message(\"Failed to get QA manifest: %s\",data))
+      return
+    end
+    local repos = json.decode(data)
+    for k,v in pairs(repos) do v.name = k end
+    self.QAList:update(repos)
+  end)
+end
+
+function QuickApp:installClicked()
+  if not version then
+    self:ERROR(\"Please select a version\")
+    return
+  end
+  self:git_getQA('jangabrielsson','EventRunner6',\"dist/EventRunner6.fqa\",version,function(ok,data)
+    if not ok then 
+      self:ERROR(self:message(\"Failed to get EventRunner6 v%s\",version))
+      return
+    end
+    data = json.decode(data)
+    local res,code = api.post(\"/quickApp/\",data)
+    if code > 202 then 
+      self:ERROR(self:message(\"Failed to install EventRunner6 %s %s\",version,data))
+    else
+      self:INFO(self:message(\"Installed EventRunner6 v%s as ID %s.\",version,res.id))
+      self:refreshClicked()
+    end
+  end)
+end
+
+function QuickApp:versionSelected(ev)
+  version = ev.values[1]
+  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qadev or \"?\",version or \"?\"))
+end
+
+function QuickApp:qadevSelected(ev)
+  qadev = tonumber(ev.values[1])
+  self:updateView(\"sel\",'text',fmt(\"Selected: %s / %s\",qadev or \"?\",version or \"?\"))
+end
+
+function QuickApp:updateClicked(ev)
+  if not qadev or not version then
+    self:ERROR(self:message(\"Please select both EventRunner6 and version\"))
+    return
+  end
+  self:updateMe(qadev, nil, version)
+end
+
+function QuickApp:INFO(...) self:debug(fmt(...)) end
+function QuickApp:ERROR(...) self:error(fmt(...)) end
+
+function QuickApp:updateMe(id, myVersion, toVersion)
+  local id = tonumber(id)
+  if id == nil then
+    self:error(\"No valid EventRunner6 ID\")
+    return
+  end
+  self:git_getQA('jangabrielsson','EventRunner6',\"dist/EventRunner6.fqa\",toVersion,function(ok,data)
+    if ok then
+      self:INFO(self:message(\"Found version v%s\", toVersion))
+      local fqa = json.decode(data)
+      local files,main = fqa.files,nil
+      for i,f in ipairs(files) do if f.isMain then main = i break end end
+      if not main then
+        self:ERROR(self:message(\"No main file found in EventRunner6 v%s\",toVersion))
+        return
+      end
+      table.remove(files,main) -- skip main
+      local res,code = api.put(\"/quickApp/\"..id..\"/files\", files)
+      if code > 202 then
+        self:ERROR(self:message(\"Failed to update EventRunner6 %s files\",toVersion))
+        return
+      end
+      self:INFO(self:message(\"Updated %d files\",#files))
+    else
+      self:ERROR(self:message(\"Failed to get EventRunner6 v%s\",toVersion))
+      -- Send error response
+    end
+  end)
+end
+
+function QuickApp:git_getRepo(cb)
+  net.HTTPClient():request(\"https://raw.githubusercontent.com/jangabrielsson/plua/refs/heads/main/docs/QAs.json\",{
+    options = {checkCertificate = false, timeout=20000},
+    success = function(response)
+      if response and response.status == 200 then
+        cb(true,response.data)
+      else cb(false,response and response.status or \"nil\") end
+    end,
+    error = function(err) cb(false,err) end
+  })
+end
+
+function QuickApp:git_getQA(user,repo,name,tag,cb)
+  local url = urlencode(fmt(\"%s/%s/%s/%s\",user,repo,tag,name))
+  url = \"https://raw.githubusercontent.com/\"..url
+  net.HTTPClient():request(url,{
+    options = {checkCertificate = false, timeout=20000},
+    success = function(response)
+      if response and response.status == 200 then
+        cb(true,response.data)
+      else cb(false,response and response.status or \"nil\") end
+    end,
+    error = function(err) cb(false,err) end
+  })
+end
+
+function QuickApp:git_getQATags(user,repo,cb)
+  local url = fmt(\"https://api.github.com/repos/%s/%s/tags\",user,repo)
+  net.HTTPClient():request(url,{
+    options = {checkCertificate = false, timeout=20000},
+    success = function(response)
+      if response and response.status == 200 then
+        cb(true,response.data)
+      else cb(false,response and response.status or \"nil\") end
+    end,
+    error = function(err) cb(false,err) end
+  })
+end
+
+function QuickApp:message(fm,...)
+  local args,str = {...},fm or \"\"
+  if #args > 0 then str = fmt(fm,...) end
+  self:updateView('msg','text',str)
+  return str
+end
+
+function urlencode(str) -- very useful
+  if str then
+    str = str:gsub(\"\\n\", \"\\r\\n\")
+    str = str:gsub(\"([^%w %-%_%.%~])\", function(c) return (\"%%%02X\"):format(string.byte(c)) end)
+    str = str:gsub(\" \", \"%%20\")
+  end
+  return str
+end","isMain":true,"isOpen":false}],"initialInterfaces":[],"initialProperties":{"apiVersion":"1.3","buildNumber":1,"deviceRole":"Other","quickAppUuid":"f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c","quickAppVariables":[],"supportedDeviceRoles":["Other"],"typeTemplateInitialized":true,"uiCallbacks":[{"name":"qaList","callback":"qaList","eventType":"onToggled"},{"name":"qaVersion","callback":"qaVersion","eventType":"onToggled"},{"name":"qaInstance","callback":"qaInstance","eventType":"onToggled"},{"name":"upd","callback":"updateClicked","eventType":"onReleased"},{"name":"upd","callback":"","eventType":"onLongPressDown"},{"name":"upd","callback":"","eventType":"onLongPressReleased"},{"name":"ref","callback":"refreshClicked","eventType":"onReleased"},{"name":"ref","callback":"","eventType":"onLongPressDown"},{"name":"ref","callback":"","eventType":"onLongPressReleased"},{"name":"install","callback":"installClicked","eventType":"onReleased"},{"name":"install","callback":"","eventType":"onLongPressDown"},{"name":"install","callback":"","eventType":"onLongPressReleased"}],"uiView":[{"type":"horizontal","components":[{"type":"label","name":"l1","style":{"weight":"1.0"},"text":"ER Updater","visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"select","name":"qaList","value":"","eventBinding":{"onToggled":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onToggled","qaList","$event.value"]}}]},"options":[],"selectionType":"single","style":{"weight":"1.0"},"text":"","values":[],"visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"select","name":"qaVersion","value":"","eventBinding":{"onToggled":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onToggled","qaVersion","$event.value"]}}]},"options":[],"selectionType":"single","style":{"weight":"1.0"},"text":"","values":[],"visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"select","name":"qaInstance","value":"","eventBinding":{"onToggled":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onToggled","qaInstance","$event.value"]}}]},"options":[],"selectionType":"single","style":{"weight":"1.0"},"text":"","values":[],"visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"label","name":"sel","style":{"weight":"1.0"},"text":"","visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"button","name":"upd","eventBinding":{"onLongPressDown":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressDown","upd"]}}],"onLongPressReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressReleased","upd"]}}],"onReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onReleased","upd"]}}]},"style":{"weight":"0.25"},"text":"Update","visible":true},{"type":"button","name":"ref","eventBinding":{"onLongPressDown":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressDown","ref"]}}],"onLongPressReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressReleased","ref"]}}],"onReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onReleased","ref"]}}]},"style":{"weight":"0.25"},"text":"Refresh","visible":true},{"type":"button","name":"install","eventBinding":{"onLongPressDown":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressDown","install"]}}],"onLongPressReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onLongPressReleased","install"]}}],"onReleased":[{"type":"deviceAction","params":{"actionName":"UIAction","args":["onReleased","install"]}}]},"style":{"weight":"0.25"},"text":"Install","visible":true}],"style":{"weight":"1.0"}},{"type":"horizontal","components":[{"type":"label","name":"msg","style":{"weight":"1.0"},"text":"","visible":true}],"style":{"weight":"1.0"}}],"useEmbededView":true,"useUiView":true,"userDescription":"","viewLayout":{"$jason":{"body":{"header":{"style":{"height":"0"},"title":"quickApp_device_52"},"sections":{"items":[{"type":"vertical","components":[{"type":"label","name":"l1","style":{"weight":"1.2"},"text":"ER Updater","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"select","name":"qaList","options":[],"selectionType":"single","style":{"weight":"1.2"},"text":"","values":[],"visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"select","name":"qaVersion","options":[],"selectionType":"single","style":{"weight":"1.2"},"text":"","values":[],"visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"select","name":"qaInstance","options":[],"selectionType":"single","style":{"weight":"1.2"},"text":"","values":[],"visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"label","name":"sel","style":{"weight":"1.2"},"text":"","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"horizontal","components":[{"type":"button","name":"upd","style":{"weight":"0.33"},"text":"Update","visible":true},{"type":"button","name":"ref","style":{"weight":"0.33"},"text":"Refresh","visible":true},{"type":"button","name":"install","style":{"weight":"0.33"},"text":"Install","visible":true}],"style":{"weight":"1.2"}},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}},{"type":"vertical","components":[{"type":"label","name":"msg","style":{"weight":"1.2"},"text":"","visible":true},{"type":"space","style":{"weight":"0.5"}}],"style":{"weight":"1.2"}}]}},"head":{"title":"quickApp_device_52"}}}}}
