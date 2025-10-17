@@ -3,61 +3,81 @@
 --%%desktop:true
 --%%uid:f1e8b33e2-3c4b-2c5a-9f6a-7b8c2369e1f2c
 --%%save:dist/ERUpdater.fqa
+
 --%%u:{label='l1', text="ER Updater"}
+
 --%%u:{select='qaList', options={}, onToggled='qaList'}
 --%%u:{select='qaVersion', options={}, onToggled='qaVersion'}
 --%%u:{select='qaInstance', options={}, onToggled='qaInstance'}
+
 --%%u:{label='sel', text=''}
+
 --%%u:{{button='upd', text="Update", onReleased='updateClicked'},{button='ref', text="Refresh", onReleased='refreshClicked'},{button='install', text="Install", onReleased='installClicked'}}
+--%%file:$fibaro.lib.Selectable,selectable
 --%%u:{label='msg', text=''}
---%%offline:true
+--%% offline:true
 
 local VERSION = "0.0.48"
-local ER_UUID = "f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c"
 local fmt = string.format
 
+local function map(f,t) for k,v in pairs(t) do f(v,k) end end
+local QATYPE,QATAG,QAID = "?","?","?"
+
+QAList = {}
 class "QAList"(Selectable)
 function QAList:__init(qa) Selectable.__init(self,qa,"qaList") end
-function QAList:text(item) return item.name end. -- { name=..., path=..., uid=...}
+function QAList:text(item) return item.name end -- { name=..., path=..., uid=..., ...}
 function QAList:value(item) return item.uid end
 function QAList:sort(a,b) return a.name < b.name end -- sort list by name
-function QAList:selected(item)  -- select QA device struct
-  
-  self:git_getQATags('jangabrielsson',item.name,function(ok,data)
-    local vers = {{type'option', text="---", value=""}}
+function QAList:selected(item)  -- select QA list item
+  quickApp:git_getQATags('jangabrielsson',item.name,function(ok,data)
+    local tags = {}
     if ok then
-      local tags = json.decode(data)
-      for _,t in ipairs(tags) do 
-        vers[#vers+1] = {type='option', text=t.name, value=t.name} 
-      end
+      local tags0 = json.decode(data)
+      for i=1,5 do local t = tags0[i]; if t==nil then break end tags[#tags+1] = {name=t.name, uid=t.name} end
     end
-    self.qa:updateView('version','options',vers)
+    local devs = api.get("/devices?property=[quickAppUuid,"..item.uid.."]") or {}
+    QATYPE,QATAG,QAID = item.name,"?","?"
+    quickApp:updateView("sel","text",fmt("%s:%s:%s",QATYPE,QATAG,QAID))
+    self.qa.QAversions:update(tags)
+    self.qa.QAinstance:update(devs)
   end)
-  self.qa.QAversions:update(vars)
-  self.qa:updateView("value","text","")
+
 end
 
+QAversions = {}
 class "QAversions"(Selectable)
-function QAVars:__init(qa) Selectable.__init(self,qa,"qaVersion") end
-function QAVars:text(item) return item.name end
-function QAVars:value(item) return item.name end
-function QAVars:sort(a,b) return a.name < b.name end
-function QAVars:selected(item) -- {name=.., value=...} item selected 
-  self.qa:updateView("value","text",tostring(item.value))
+function QAversions:__init(qa) Selectable.__init(self,qa,"qaVersion") end
+function QAversions:text(item) return item.name end
+function QAversions:value(item) return item.uid end
+function QAversions:sort(a,b) return a.name >= b.name end
+function QAversions:selected(item) -- {name=.., value=...} item selected 
+  QATAG = item.name
+  quickApp:updateView("sel","text",fmt("%s:%s:%s",QATYPE,QATAG,QAID))
 end
 
-class "QAs"(Selectable)
-function QAVars:__init(qa) Selectable.__init(self,qa,"qaInstance") end
-function QAVars:text(item) return item.name end
-function QAVars:value(item) return item.name end
-function QAVars:sort(a,b) return a.name < b.name end
-function QAVars:selected(item) -- {name=.., value=...} item selected 
-  self.qa:updateView("value","text",tostring(item.value))
+QAinstance = {}
+class "QAinstance"(Selectable)
+function QAinstance:__init(qa) Selectable.__init(self,qa,"qaInstance") end
+function QAinstance:text(item) return fmt("%s:%s (%s)",item.id,item.name,item.properties.model or "") end
+function QAinstance:value(item) return item.id end
+function QAinstance:sort(a,b) return a.name < b.name end
+function QAinstance:selected(item) -- {name=.., value=...} item selected 
+  QAID = item.id
+  quickApp:updateView("sel","text",fmt("%s:%s:%s",QATYPE,QATAG,QAID))
 end
 
 function QuickApp:onInit()
+  quickApp = self
   self:debug(self.name,self.id)
   self:updateView('l1',"text",fmt("QA Manager v%s",VERSION))
+
+  self.QAList = QAList(self)
+  self.QAversions = QAversions(self)
+  self.QAinstance = QAinstance(self)
+  self.QAversions:update({})
+  self.QAinstance:update({})
+
   self:updateView('sel',"text","")
   self:updateView('msg',"text","")
   setInterval(function() self:refreshClicked() end, 60*60*1000) -- Refresh every hour
@@ -71,25 +91,11 @@ function QuickApp:refreshClicked()
       return
     end
     local repos = json.decode(data)
-    print(data)
-  end)
-  local res = api.get("/devices?property=[quickAppUuid,"..ER_UUID.."]") or {}
-  local ers = {{type='option', text="---", value=""}}
-  for _,q in ipairs(res) do ers[#ers+1] = {type='option', text=fmt("%s: %s",q.id,q.name),value=tostring(q.id)} end
-  self:updateView('qadev','options',ers)
-  self:git_getQATags('jangabrielsson','EventRunner6',function(ok,data)
-    local vers = {{type'option', text="---", value=""}}
-    if ok then
-      local tags = json.decode(data)
-      for _,t in ipairs(tags) do 
-        vers[#vers+1] = {type='option', text=t.name, value=t.name} 
-      end
-    end
-    self:updateView('version','options',vers)
+    for k,v in pairs(repos) do v.name = k end
+    self.QAList:update(repos)
   end)
 end
 
-local qadev,version = nil,nil
 function QuickApp:installClicked()
   if not version then
     self:ERROR("Please select a version")

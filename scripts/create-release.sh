@@ -6,10 +6,10 @@
 # Features:
 # - Updates version numbers in source files
 # - Generates changelog from git commits
-# - Creates .fqa artifacts in dist/
+# - Creates artifacts in dist/
 # - Creates git tag and pushes to remote
 # - Creates GitHub release with artifacts attached
-# - Uploads EventRunner6.fqa and ERUpdater.fqa files
+# - Uploads artifact files automatically
 # - GitHub automatically generates source code archives
 #
 # Usage:
@@ -18,6 +18,26 @@
 #   ./scripts/create-release.sh --dry-run    # Same as --preview
 
 set -e  # Exit on any error
+
+# Get script directory and load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/project-config.sh"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file not found: $CONFIG_FILE"
+    echo "Please create project-config.sh with your project settings."
+    echo "See project-config.sh.example for a template."
+    exit 1
+fi
+
+# Source the configuration
+source "$CONFIG_FILE"
+
+# Validate configuration
+if ! validate_config; then
+    echo "Error: Invalid configuration in $CONFIG_FILE"
+    exit 1
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -40,8 +60,8 @@ command_exists() {
 
 # Function to get current version
 get_current_version() {
-    if [ -f ".version" ]; then
-        cat .version | tr -d '\n'
+    if [ -f "$VERSION_FILE" ]; then
+        cat "$VERSION_FILE" | tr -d '\n'
     else
         echo "0.0.0"
     fi
@@ -358,24 +378,33 @@ create_artifacts() {
     info "Creating release artifacts..."
     
     # Create dist directory if it doesn't exist
-    mkdir -p dist
+    mkdir -p "$DIST_DIR"
     
-    # Create EventRunner6.fqa
-    if [ -f "src/eventrunner.lua" ]; then
-        info "Creating dist/EventRunner6.fqa..."
-        plua -t pack src/eventrunner.lua dist/EventRunner6.fqa
-        success "Created dist/EventRunner6.fqa"
-    else
-        warning "src/eventrunner.lua not found, skipping EventRunner6.fqa"
-    fi
+    # Build each configured artifact
+    for artifact in "${ARTIFACTS[@]}"; do
+        IFS=':' read -r source output command <<< "$artifact"
+        
+        if [ -f "$source" ]; then
+            info "Creating $output..."
+            
+            # Replace placeholders in command
+            build_cmd="${command//\{SOURCE\}/$source}"
+            build_cmd="${build_cmd//\{OUTPUT\}/$output}"
+            
+            # Execute the build command
+            if eval "$build_cmd"; then
+                success "Created $output"
+            else
+                warning "Failed to create $output"
+            fi
+        else
+            warning "$source not found, skipping $output"
+        fi
+    done
     
-    # Create ERUpdater.fqa
-    if [ -f "src/updater.lua" ]; then
-        info "Creating dist/ERUpdater.fqa..."
-        plua -t pack src/updater.lua dist/ERUpdater.fqa
-        success "Created dist/ERUpdater.fqa"
-    else
-        warning "src/updater.lua not found, skipping ERUpdater.fqa"
+    # Call custom artifact build hook if defined
+    if declare -f custom_artifact_build >/dev/null; then
+        custom_artifact_build
     fi
 }
 
@@ -385,24 +414,18 @@ commit_and_push() {
     
     info "Committing release changes..."
     
-    # Add all changed files
-    git add .version CHANGELOG.md
+    # Add all configured release files
+    for file in "${RELEASE_FILES[@]}"; do
+        if [ -f "$file" ]; then
+            git add "$file"
+        fi
+    done
     
-    # Add source files that may have been updated
-    [ -f "src/rule.lua" ] && git add src/rule.lua
-    [ -f "src/eventrunner.lua" ] && git add src/eventrunner.lua
-    [ -f "src/updater.lua" ] && git add src/updater.lua
-    
-    # Add artifacts if they exist
-    [ -f "dist/EventRunner6.fqa" ] && git add dist/EventRunner6.fqa
-    [ -f "dist/ERUpdater.fqa" ] && git add dist/ERUpdater.fqa
+    # Format commit message from template
+    local commit_msg="${RELEASE_COMMIT_TEMPLATE//\{VERSION\}/$version}"
     
     # Commit the changes
-    git commit -m "chore: release v$version
-
-- Update version to $version in all files
-- Update CHANGELOG.md with release notes
-- Generate release artifacts (dist/EventRunner6.fqa, dist/ERUpdater.fqa)"
+    git commit -m "$commit_msg"
     
     success "Committed release changes"
     
@@ -420,10 +443,12 @@ create_and_push_tag() {
     
     info "Creating and pushing release tag..."
     
+    # Format tag message from template
+    local tag_msg="${TAG_MESSAGE_TEMPLATE//\{VERSION\}/$version}"
+    tag_msg="${tag_msg//\{NOTES\}/$release_notes}"
+    
     # Create annotated tag with release notes
-    git tag -a "v$version" -m "Release v$version
-
-$release_notes"
+    git tag -a "v$version" -m "$tag_msg"
     
     # Push the tag
     git push origin "v$version"
@@ -456,21 +481,13 @@ create_github_release() {
         return 1
     fi
     
-    # Upload artifacts if they exist
-    local artifacts=()
+    # Get list of artifact files to upload
+    local artifact_files=($(get_artifact_files))
     
-    if [ -f "dist/EventRunner6.fqa" ]; then
-        artifacts+=("dist/EventRunner6.fqa")
-    fi
-    
-    if [ -f "dist/ERUpdater.fqa" ]; then
-        artifacts+=("dist/ERUpdater.fqa")
-    fi
-    
-    if [ ${#artifacts[@]} -gt 0 ]; then
+    if [ ${#artifact_files[@]} -gt 0 ]; then
         info "Uploading release artifacts..."
         
-        for artifact in "${artifacts[@]}"; do
+        for artifact in "${artifact_files[@]}"; do
             info "Uploading $artifact..."
             if gh release upload "v$version" "$artifact"; then
                 success "Uploaded $artifact"
@@ -479,7 +496,7 @@ create_github_release() {
             fi
         done
     else
-        warning "No artifacts found in dist/ to upload"
+        warning "No artifacts found to upload"
     fi
     
     # The source code archives (zip and tar.gz) are automatically created by GitHub
@@ -491,22 +508,24 @@ create_github_release() {
     
     # Generate forum post content
     info "📝 Generating forum post..."
-    mkdir -p doc/notes
+    mkdir -p "$NOTES_DIR"
     ./scripts/forum-post-generator.sh "$version" "$release_notes"
     
     # Open the forum post directly in browser
     if command -v open >/dev/null 2>&1; then
-        open "doc/notes/release-v$version.html"
+        open "$NOTES_DIR/release-v$version.html"
         info "🌐 Forum post opened in your default browser"
     elif command -v code >/dev/null 2>&1; then
-        code "doc/notes/release-v$version.html"
+        code "$NOTES_DIR/release-v$version.html"
         info "📝 File opened in VS Code"
     else
-        info "💡 Open doc/notes/release-v$version.html in your browser"
+        info "💡 Open $NOTES_DIR/release-v$version.html in your browser"
     fi
     
-    info "📖 Forum post available at: doc/notes/release-v$version.html"
-    info "📋 Ready to copy and paste to Fibaro Forum!"
+    info "📖 Forum post available at: $NOTES_DIR/release-v$version.html"
+    if [ -n "$FORUM_URL" ]; then
+        info "📋 Ready to copy and paste to $FORUM_URL"
+    fi
 }
 
 # Function to preview release notes without creating a release
@@ -595,8 +614,17 @@ preview_release() {
 
 # Main function
 main() {
-    echo -e "${CYAN}[INFO] 🚀 GitHub Release Helper for EventRunner${NC}"
+    echo -e "${CYAN}[INFO] 🚀 GitHub Release Helper for $PROJECT_NAME${NC}"
     echo ""
+    
+    # Call pre-release hook if defined
+    if declare -f pre_release_hook >/dev/null; then
+        info "Running pre-release hook..."
+        if ! pre_release_hook; then
+            error "Pre-release hook failed"
+            exit 1
+        fi
+    fi
     
     # Check dependencies and git status
     check_dependencies
@@ -742,8 +770,19 @@ This release includes various improvements and bug fixes."
     success "🎉 Release v$new_version created successfully!"
     local repo_info=$(gh repo view --json owner,name -q '.owner.login + "/" + .name')
     info "GitHub release: https://github.com/$repo_info/releases/tag/v$new_version"
-    info "Artifacts uploaded: EventRunner6.fqa, ERUpdater.fqa"
+    
+    # Show uploaded artifacts
+    local artifact_names=($(get_artifact_names))
+    if [ ${#artifact_names[@]} -gt 0 ]; then
+        info "Artifacts uploaded: ${artifact_names[*]}"
+    fi
     info "Source archives automatically generated by GitHub"
+    
+    # Call post-release hook if defined
+    if declare -f post_release_hook >/dev/null; then
+        info "Running post-release hook..."
+        post_release_hook "$new_version"
+    fi
 }
 
 # Run main function with argument parsing
@@ -782,10 +821,12 @@ case "${1:-}" in
         
         # Open browser with forum post
         info "🌐 Opening forum post in browser..."
-        open "doc/notes/release-v$2.html"
+        open "$NOTES_DIR/release-v$2.html"
         
-        info "📖 Forum post available at: doc/notes/release-v$2.html"
-        info "📋 Ready to copy and paste to Fibaro Forum!"
+        info "📖 Forum post available at: $NOTES_DIR/release-v$2.html"
+        if [ -n "$FORUM_URL" ]; then
+            info "📋 Ready to copy and paste to $FORUM_URL"
+        fi
         exit 0
         ;;
     "")

@@ -1,10 +1,40 @@
 #!/bin/bash
 
-# Forum post generator for Fibaro Forum
+# Forum post generator for Fibaro Forum (or other forums)
+
+# Get script directory and load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/project-config.sh"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Configuration file not found: $CONFIG_FILE"
+    echo "Please create project-config.sh with your project settings."
+    exit 1
+fi
+
+# Source the configuration
+source "$CONFIG_FILE"
+
+# Validate configuration
+if ! validate_config; then
+    echo "Error: Invalid configuration in $CONFIG_FILE"
+    exit 1
+fi
+
+# Forum post generator
 generate_forum_post() {
     local version=$1
     local release_notes=$2
-    local github_url="https://github.com/jangabrielsson/EventRunner6"
+    local github_url="https://github.com/$GITHUB_REPO"
+    
+    # Get artifact names for download links
+    local artifact_names=($(get_artifact_names))
+    
+    # Build artifact download links HTML
+    local artifact_links=""
+    for artifact in "${artifact_names[@]}"; do
+        artifact_links+="<li><a href=\"$github_url/releases/download/v$version/$artifact\">$artifact</a></li>"
+    done
     
     # Convert markdown-style formatting for HTML display
     local formatted_notes=$(echo "$release_notes" | \
@@ -25,14 +55,15 @@ generate_forum_post() {
              END{if(in_list)print "</ul>"}' | \
         sed 's/\*\*\([^*]*\)\*\*/\<strong\>\1\<\/strong\>/g')
     
-    # Create HTML forum post in doc/notes directory (using temp file to avoid race conditions)
+    # Create HTML forum post in configured notes directory
+    mkdir -p "$NOTES_DIR"
     local temp_file=$(mktemp)
     cat > "$temp_file" << EOF
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>EventRunner 6 v$version - Forum Post</title>
+    <title>$PROJECT_NAME v$version - Forum Post</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -82,27 +113,40 @@ generate_forum_post() {
     </style>
 </head>
 <body>
-    <h1>EventRunner 6 v$version - Forum Post Helper</h1>
+    <h1>$PROJECT_NAME v$version - Forum Post Helper</h1>
     
     <div>
         <button class="copy-button" onclick="copyToClipboard()">📋 Copy Forum Post</button>
-        <a href="https://forum.fibaro.com/topic/79165-eventrunner-6/" class="forum-link" target="_blank">🌐 Open Fibaro Forum Thread</a>
+EOF
+
+    # Add forum link if configured
+    if [ -n "$FORUM_URL" ]; then
+        cat >> "$temp_file" << EOF
+        <a href="$FORUM_URL" class="forum-link" target="_blank">🌐 Open Forum Thread</a>
+EOF
+    fi
+
+    cat >> "$temp_file" << EOF
     </div>
     
     <div class="post-content" id="forumPost">
-<h2>🚀 EventRunner 6 - Release v$version</h2>
+<h2>🚀 $PROJECT_NAME - Release v$version</h2>
 
 $formatted_notes
 
 <h3>📥 <strong>Download</strong></h3>
 <ul>
 <li><strong>GitHub Releases</strong>: <a href="$github_url/releases/tag/v$version">$github_url/releases/tag/v$version</a></li>
-<li><strong>Direct .fqa files</strong>: <a href="$github_url/releases/download/v$version/EventRunner6.fqa">EventRunner6.fqa</a>, <a href="$github_url/releases/download/v$version/ERUpdater.fqa">ERUpdater.fqa</a></li>
+<li><strong>Direct Downloads</strong>:
+<ul>
+$artifact_links
+</ul>
+</li>
 </ul>
 
 <h3>📚 <strong>Documentation</strong></h3>
 <ul>
-<li><strong>Full Documentation</strong>: <a href="$github_url/blob/main/README.md">$github_url/blob/main/README.md</a></li>
+<li><strong>Full Documentation</strong>: <a href="$DOCUMENTATION_URL">$DOCUMENTATION_URL</a></li>
 </ul>
 
 <hr>
@@ -138,21 +182,23 @@ $formatted_notes
 </html>
 EOF
 
-    # Move temp file to final location atomically and ensure it's fully written
-    mv "$temp_file" "doc/notes/release-v$version.html"
+    # Move temp file to final location atomically
+    mv "$temp_file" "$NOTES_DIR/release-v$version.html"
     
     # Wait for file to be fully available and verify it has content
     local retries=0
     while [ $retries -lt 10 ]; do
-        if [ -s "doc/notes/release-v$version.html" ]; then
+        if [ -s "$NOTES_DIR/release-v$version.html" ]; then
             break
         fi
         sleep 0.1
         retries=$((retries + 1))
     done
     
-    echo "✅ Forum post created: doc/notes/release-v$version.html"
-    echo "📋 Copy and paste this content to: https://forum.fibaro.com/topic/79165-eventrunner-6/"
+    echo "✅ Forum post created: $NOTES_DIR/release-v$version.html"
+    if [ -n "$FORUM_URL" ]; then
+        echo "📋 Copy and paste this content to: $FORUM_URL"
+    fi
 }
 
 # Export function for use in release script
