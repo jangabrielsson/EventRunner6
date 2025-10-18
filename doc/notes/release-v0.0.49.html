@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>EventRunner6 v0.0.49 - Forum Post</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: white;
+            color: #333;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .post-content {
+            background: #fafafa;
+            border: 1px solid #e1e1e1;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .copy-button {
+            background: #0366d6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .copy-button:hover {
+            background: #0256cc;
+        }
+        .forum-link {
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .forum-link:hover {
+            background: #218838;
+        }
+        h2 { color: #0366d6; }
+        h3 { color: #586069; }
+        code { background: #f6f8fa; padding: 2px 4px; border-radius: 3px; }
+        .emoji { font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <h1>EventRunner6 v0.0.49 - Forum Post Helper</h1>
+    
+    <div>
+        <button class="copy-button" onclick="copyToClipboard()">📋 Copy Forum Post</button>
+        <a href="https://forum.fibaro.com/topic/79165-eventrunner-6/" class="forum-link" target="_blank">🌐 Open Forum Thread</a>
+    </div>
+    
+    <div class="post-content" id="forumPost">
+<h2>🚀 EventRunner6 - Release v0.0.49</h2>
+
+<h3>Changes in v0.0.49</h3>
+<ul>
+<li>✨ <strong>Feature</strong>: Add universal release scripts for Lua projects</li>
+</ul>
+  - Introduced a new `scripts` directory containing release automation scripts.
+  - Added `project-config.sh` for project-specific settings and `project-config.sh.example` as a template.
+  - Implemented `create-release.sh` for automated release creation, including version bumping, changelog generation, and GitHub release uploads.
+  - Created `setversion.sh` to update version numbers in source files based on configuration.
+  - Developed `forum-post-generator.sh` to generate HTML forum posts for releases.
+  - Enhanced artifact management with customizable build commands and support for multiple artifact types.
+  - Added pre-release and post-release hooks for custom actions during the release process.
+  - Updated documentation in `README.md` to guide users on how to use the new scripts and configure their projects.
+  - Refactored existing scripts to improve error handling and configuration validation.
+<ul>
+<li>✨ <strong>Feature</strong>: enhance ERUpdater functionality with QA selection</li>
+<li>✨ <strong>Feature</strong>: add QA list, version selection, and instance selection</li>
+<li>🐛 <strong>Fix</strong>: update view handling for QA selections</li>
+<li>✨ <strong>Feature</strong>: add release notes for v0.0.48</li>
+<li>🐛 <strong>Fix</strong>: improve forum post helper layout and functionality</li>
+<li>🐛 <strong>Fix</strong>: enhance copy to clipboard feature for forum post</li>
+</ul>
+<p><em>Generated automatically from git commits</em></p>
+
+<h3>📥 <strong>Download</strong></h3>
+<ul>
+<li><strong>GitHub Releases</strong>: <a href="https://github.com/jangabrielsson/EventRunner6/releases/tag/v0.0.49">https://github.com/jangabrielsson/EventRunner6/releases/tag/v0.0.49</a></li>
+<li><strong>Direct Downloads</strong>:
+<ul>
+<li><a href="https://github.com/jangabrielsson/EventRunner6/releases/download/v0.0.49/EventRunner6.fqa">EventRunner6.fqa</a></li><li><a href="https://github.com/jangabrielsson/EventRunner6/releases/download/v0.0.49/ERUpdater.fqa">ERUpdater.fqa</a></li>
+</ul>
+</li>
+</ul>
+
+<h3>📚 <strong>Documentation</strong></h3>
+<ul>
+<li><strong>Full Documentation</strong>: <a href="https://github.com/jangabrielsson/EventRunner6/blob/main/README.md">https://github.com/jangabrielsson/EventRunner6/blob/main/README.md</a></li>
+</ul>
+
+<hr>
+<p><em>This release was automatically generated from commit ca21632</em></p>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            const postContent = document.getElementById('forumPost');
+            const range = document.createRange();
+            range.selectNode(postContent);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            
+            try {
+                document.execCommand('copy');
+                const button = document.querySelector('.copy-button');
+                const originalText = button.textContent;
+                button.textContent = '✅ Copied!';
+                button.style.background = '#28a745';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#0366d6';
+                }, 2000);
+            } catch (err) {
+                alert('Please manually select and copy the content below');
+            }
+            
+            window.getSelection().removeAllRanges();
+        }
+    </script>
+</body>
+</html>
