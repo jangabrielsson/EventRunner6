@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.50] - 2025-10-18
+
+## Changes in v0.0.50
+
+- ♻️ **Refactor**: clean up setversion.sh script
+- 🐛 **Fix**: correct version update logic in source files
+- ✨ **Feature**: add release notes for v0.0.49
+- ✨ **Feature**: introduce universal release scripts for Lua projects
+- 🐛 **Fix**: update version number in rule and updater scripts
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.49] - 2025-10-17
 
 ## Changes in v0.0.49
