@@ -1,5 +1,5 @@
 --%%name:ER6
---%%offline:true
+--%% offline:true
 --%%headers:src/include.txt
 --%%file:tests/addons/nodered.lua,nodered
 
@@ -36,8 +36,8 @@ function QuickApp:main(er)
     fake = 5675675,
     kitchen = {
       light = {
-        roof = loadDevice("binarySwitch"),
-        window =  loadDevice("multilevelSwitch"),
+        -- roof = loadDevice("binarySwitch"),
+        -- window =  loadDevice("multilevelSwitch"),
       }
     }
   }
@@ -127,18 +127,7 @@ function QuickApp:main(er)
   
   -- rule("#foo => wait(10); return 77",{triggers=true,started=false,check=check})
   -- rule("post(#foo)",{nolog=true})
-  
-  FakeLamp = {}
-  er.definePropClass("FakeLamp") -- Define custom weather object
-  function FakeLamp:__init(id,value) PropObject.__init(self) self.id = id self.value = value end
-  function FakeLamp.getProp.value(prop,env) return prop.value end
-  function FakeLamp.getProp.off(prop,env) print(prop,"turned off") prop.value = 0 return true end
-  function FakeLamp.setProp.value(prop,env,value) print(prop,"value =",value) prop.value =  value end
-  function FakeLamp.trigger.value(prop) return {type='fakeLamp', id=prop.id, property='value'} end
-  function FakeLamp:__tostring() return string.format("FakeLamp(%d)",self.id) end
-  
-  var.kitchen = { lamp = FakeLamp(89, 77) }
-  var.bedroom = { lamp =  FakeLamp(99, 30) }
+
   
   -- rule("earthLight = {kitchen.lamp, bedroom.lamp}")
   -- rule("log('Earth light IDs: %s',json.encodeFast(earthLight))")
@@ -179,11 +168,6 @@ function QuickApp:main(er)
   -- rule("log('Hupp')")
   -- rule("return 5+5",{no_expr_result=true}) -- Just to test no_expr_result
 
-  vremote = nil
-  rule([[
-    @now+1 => HT.fopp:on
-]])
-
   -- rule("#rule-error{message='$msg',rule='$rule'} => log('Error captured: %s',msg)") 
 
   --var.test = {SWITCH = var.HT.kitchen.light.roof }
@@ -209,6 +193,11 @@ function QuickApp:main(er)
   --rule("lights:isOff => log('All lights are off')")
   -- rule("HT.kitchen.light.roof:on; wait(1); HT.kitchen.light.roof:off")
   -- rule("lights:on; wait(1); lights:off")
+
+  sensor = 1634
+  rule("@now+1 => post(#foo)")
+  rule("log('Sensor:last=%s',sensor:last)")
+  rule("trueFor(2*24:00-sensor:last, sensor:safe) => log('Sensor safe for 2 days!')").start()
 end
 
 --%%time:2025/01/01 09:00:00

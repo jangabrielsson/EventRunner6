@@ -125,6 +125,7 @@ local function createRule(expr, data, opts)
       timers[ref] = nil
       return table.unpack(res)
     end
+    if type(t) ~= 'number' and t < 0 then t=0 end
     ref = setTimeout(fun,t)
     timers[ref] = true
     return ref
