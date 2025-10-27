@@ -368,7 +368,8 @@ function findTriggers(c, cont, env, df)
         end
         if not obj:isTrigger(prop) then return cont() end
         local tr = obj:getTrigger(o,prop)
-        env.triggers["DEV:"..tostring(o)..prop]=Event(tr)
+        local kp = tr.property or prop
+        env.triggers["DEV:"..tostring(o)..kp]=Event(tr)
       end
       cont()
     end,env)

@@ -19,6 +19,7 @@ end
 local _,_ = api.post("/globalVariables/",{name="GV1",value="0"})
 -- /Users/jangabrielsson/Desktop/Fibaro/plua/examples/fibaro/stdQAs/alarmPartition.lua
 function QuickApp:main(er)
+  fibaro.EventRunner.debugFlags.sourceTrigger = true
   local rule,var,triggerVar = er.rule,er.variables,er.triggerVariables
   local function loadDevice(name) return er.loadSimDevice(name..".lua") end
   er.opts = { defined = true, started = false, check = true, result = false, triggers=true, no_expr_result=true} --nolog=true }
@@ -34,10 +35,13 @@ function QuickApp:main(er)
   var.HT = {
    -- remote = loadDevice("remoteController"),
     fake = 5675675,
+    stairs = {
+      motion = { loadDevice("binarySensor"),loadDevice("binarySensor")  },
+    },
     kitchen = {
       light = {
-        -- roof = loadDevice("binarySwitch"),
-        -- window =  loadDevice("multilevelSwitch"),
+        roof = loadDevice("binarySwitch"),
+        window =  loadDevice("multilevelSwitch"),
       }
     }
   }
@@ -194,10 +198,19 @@ function QuickApp:main(er)
   -- rule("HT.kitchen.light.roof:on; wait(1); HT.kitchen.light.roof:off")
   -- rule("lights:on; wait(1); lights:off")
 
-  sensor = 1634
-  rule("@now+1 => post(#foo)")
-  rule("log('Sensor:last=%s',sensor:last)")
-  rule("trueFor(2*24:00-sensor:last, sensor:safe) => log('Sensor safe for 2 days!')").start()
+ rule("log('**Stair sensors %s',HT.stairs.motion)")
+  rule([[
+    log('**breached 366:%s, 388:%s, B:%s, S%s',5556:breached,5557:breached,HT.stairs.motion:breached,HT.stairs.motion:safe) &
+    HT.stairs.motion:breached => 
+    HT.stairs.lights:on; 
+    log('** stairs lights on (B:%s)',HT.stairs.motion:breached)
+  ]]) 
+  rule([[ 
+    log('**trueFor 366:%s, 388:%s, B:%s, S%s',5556:breached,5557:breached,HT.stairs.motion:breached,HT.stairs.motion:safe) &
+    trueFor(00:05, HT.stairs.motion:safe) => 
+    HT.stairs.lights:off; 
+    log('** stairs lights off (S:%s)',HT.stairs.motion:safe)
+  ]])
 end
 
 --%%time:2025/01/01 09:00:00

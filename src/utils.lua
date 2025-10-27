@@ -604,7 +604,7 @@ local EventTypes = {
   SectionCreatedEvent = function(d,_,post) post({type='section', id=d.id, value='created'}) end,
   SectionRemovedEvent = function(d,_,post) post({type='section', id=d.id, value='removed'}) end,
   SectionModifiedEvent = function(d,_,post) post({type='section', id=d.id, value='modified'}) end,
-  QuickAppFilesChangedEvent = function(_) end,
+  QuickAppFilesChangedEvent = function(d,_,post) post({type='filesChanged', id=d.id, value=d}) end,
   ZwaveDeviceParametersChangedEvent = function(_) end,
   ZwaveNodeAddedEvent = function(_) end,
   RefreshRequiredEvent = function(_) end,
