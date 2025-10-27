@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.0.52] - 2025-10-27
+
+## Changes in v0.0.52
+
+- ✨ **Feature**: add release notes for v0.0.51
+- 🐛 **Fix**: correct version update logic in source files
+- 🐛 **Fix**: update version number in rule and updater scripts
+- ♻️ **Refactor**: clean up rule.lua logic to prevent negative timeout values
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.51] - 2025-10-21
 
 ## Changes in v0.0.51
