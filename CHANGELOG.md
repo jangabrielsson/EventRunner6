@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.53] - 2025-10-28
+
+## Changes in v0.0.53
+
+- ✨ **Feature**: add release notes for v0.0.52
+- 🐛 **Fix**: correct version update logic in source files
+- 🐛 **Fix**: table prop reduce bug
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.52] - 2025-10-27
 
 ## Changes in v0.0.52
