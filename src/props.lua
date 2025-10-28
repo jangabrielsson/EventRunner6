@@ -21,7 +21,9 @@ local function cce(id,_,e)
 end
 local function ace(id,_,e) if e==nil then return {} end return e.type=='device' and e.property=='accessControlEvent' and e.id==id and e.value or {} end
 local function sae(id,_,e) if e==nil then return nil end return e.type=='device' and e.property=='sceneActivationEvent' and e.id==id and e.value.sceneId end
-local mapOr,mapAnd,mapF=table.mapOr,table.mapAnd,function(f,l,s) table.mapf(f,l,s); return true end
+local function mapAnd(f,l,s) s = s or 1; local e=true for i=s,table.maxn(l) do e = f(l[i]) if not e then return false end end return e end 
+local function mapOr(f,l,s) s = s or 1; for i=s,table.maxn(l) do local e = f(l[i]) if e then return e end end return false end
+local function mapF(f,l,s) table.mapf(f,l,s); return true end
 local function partition(id) return api.get("/alarms/v1/partitions/" .. id) or {} end
 local function armState(id) return id==0 and fibaro.getHomeArmState() or fibaro.getPartitionArmState(id) end
 local function arm(id,action)
