@@ -6,6 +6,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<a href="https://www.buymeacoffee.com/rywnwpdvvni" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 EventRunner6 is a powerful rule-based automation framework for Fibaro Home Center 3 (HC3) home automation systems. It provides an intuitive domain-specific language for creating complex automation rules with advanced event handling, scheduling, and device control capabilities.
 
 ## Features
