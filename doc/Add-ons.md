@@ -366,7 +366,7 @@ end
 MODULES = MODULES or {}
 
 -- Register a module
-function er.registerModule(name, priority, loader)
+function fibaro.registerModule(name, priority, loader)
   table.insert(MODULES, {
     name = name,
     prio = priority or 0,
@@ -378,28 +378,25 @@ end
 local function loadModule(m, er)
   if not m._inited then
     m._inited = true
-    er.log("INFO", "Loading module: " .. m.name, "modules")
+    print("Loading module: " .. m.name)
     m.loader(er)
   end
 end
 
 function LoadModules(er) -- Global function called from main
   table.sort(MODULES, function(a, b) return a.prio < b.prio end)
-  
-  local afterModules = 0
   for i = 1, #MODULES do
     if MODULES[i].prio < 0 then 
       loadModule(MODULES[i], er)
-    else 
-      afterModules = i
-      break 
     end
   end
   
   -- Load remaining modules after initialization
   setTimeout(function()
-    for i = afterModules, #MODULES do 
-      loadModule(MODULES[i], er) 
+    for i = 1, #MODULES do 
+      if MODULES[i].prio >= 0 then
+        loadModule(MODULES[i], er) 
+      end
     end
   end, 0)
   
@@ -407,11 +404,14 @@ function LoadModules(er) -- Global function called from main
 end
 
 -- Usage:
--- er.registerModule("Lighting", -10, function(er)
---   er.rule("LivingRoomLights", er.timer("sunset"), function()
---     api.post("/devices/123/action/turnOn")
---   end)
--- end)
+-- local function module(er)
+--  print("My rule")
+--  er.rule("@sunset => log('Sunset reached!')")
+-- end
+
+-- setTimeout(function()
+--  fibaro.registerModule("Lighting", -10, module)
+-- end,0)
 ```
 
 ## Math & Calculations
