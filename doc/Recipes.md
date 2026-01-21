@@ -69,8 +69,8 @@ rule([[remote:central.keyId == 2 =>
 ### Set a global variable with day state
 
 ```lua
-rule("@00:00 => weekDay = wday('mon-fri')").star()
-rule("@00:00 => weekEnd = wday('sat-sun')").star()
+rule("@00:00 => weekDay = wday('mon-fri')").start()
+rule("@00:00 => weekEnd = wday('sat-sun')").start()
 
 rule("weekDay & 07:00..07:30 => $HomeState='WakeUp'").start()
 rule("weekDay & 07:30..11:00 => $HomeState='Morning'").start()
