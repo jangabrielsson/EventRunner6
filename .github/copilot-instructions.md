@@ -1,137 +1,111 @@
-# GitHub Copilot Instructions for EventRunner6
+<!-- 
+  TEMPLATE for QuickApp development workspaces using plua.
+  Copy this file to your workspace as .github/copilot-instructions.md
+  Also copy .github/skills/ and .github/instructions/ folders.
+-->
 
-## Project Overview
-EventRunner6 is a rule-based automation framework for Fibaro Home Center 3 (HC3) home automation systems. It provides a domain-specific language (DSL) for creating complex automation rules with event handling, scheduling, and device control.
+# QuickApp Development with plua
 
-## Architecture
-- **Core Engine**: `eventrunner.lua` - Main QuickApp entry point
-- **Rule Engine**: `rule.lua` - Core rule processing and execution
-- **Compiler**: `compiler.lua` - Compiles EventScript DSL to Lua
-- **Parser**: `parser.lua` - Parses EventScript syntax
-- **Properties**: `props.lua` - Device property definitions and mappings
-- **Utilities**: `utils.lua` - Time handling, logging, and helper functions
-- **Built-ins**: `builtins.lua` - Built-in functions for rules
-- **Simulation**: `sim.lua` - Testing and simulation support
+You are helping develop Fibaro HC3 **QuickApps** using **plua** as the local Lua interpreter and emulator.
 
-## Code Style and Conventions
+## What is plua?
 
-### Lua Standards
-- Use 2-space indentation
-- Follow standard Lua naming conventions (snake_case for variables, camelCase for functions)
-- Use `local` for all local variables
-- Prefer explicit returns even when not required
+plua is a Lua interpreter written in Python (using Lupa) that emulates the Fibaro HC3 QuickApp environment locally. It lets you write, run, and debug QuickApps on your machine without needing a physical HC3.
 
-### EventRunner Specific
-- Rule syntax uses arrow notation: `"trigger => action"`
-- Device references use dot notation: `HT.kitchen.light.roof`
-- Time expressions use `@` for daily times: `@10:00`
-- Intervals use `@@`: `@@00:05` (every 5 minutes)
-- Global variables use `$`: `$myVariable`
-- QuickApp variables use `$$`: `$$localVar`
-- Custom events use `#`: `#customEvent`
+**Install:** `pip install plua`
 
-### Function Naming
-- Event handlers: `handle*` (e.g., `handleDeviceEvent`)
-- Utility functions: descriptive verbs (e.g., `parseTimeExpression`)
-- Rule functions: use imperative form (e.g., `turnOn`, `setValue`)
-
-## Key Patterns
-
-### Rule Definition Pattern
-```lua
-rule("condition => action")
-rule("@10:00 & sensor:breached => light:on")
-rule("@@00:15 => checkStatus()")
+**Run a QuickApp:**
+```bash
+plua --fibaro myQuickApp.lua          # run with Fibaro SDK
+plua --fibaro --run-for 0 myQA.lua   # run indefinitely (Ctrl+C to stop)
+plua --fibaro --nodebugger myQA.lua  # run without debugger (terminal testing)
 ```
 
-### Device Property Access
-```lua
--- Reading properties
-local isOn = device:isOn
-local value = device:value
-local lastTrigger = device:last
+**Execution control (`--run-for`):**
+- `--run-for 0` — run forever (needs Ctrl+C)
+- `--run-for 30` — run for at least 30 seconds, or until no active timers
+- `--run-for -30` — run for exactly 30 seconds regardless of timers
+- default — run until no active timers/callbacks remain
 
--- Setting properties  
-device:on
-device:off
-device:setValue(50)
-```
+## VS Code Integration
 
-### Event Handling
-```lua
--- Device events
-rule("device:property => action")
+Add this to `.vscode/launch.json` for F5 debugging:
 
--- Time events
-rule("@sunrise => action")
-rule("10:00..22:00 & condition => action")
-
--- Custom events
-rule("#myEvent => action")
-```
-
-### Variable Management
-```lua
--- Device mappings in variables table
-var.HT = {
-  room = {
-    device_type = { device_name = deviceId }
-  }
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Plua: Current Fibaro File",
+      "type": "luaMobDebug",
+      "request": "launch",
+      "workingDirectory": "${workspaceFolder}",
+      "sourceBasePath": "${workspaceFolder}",
+      "listenPort": 8172,
+      "stopOnEntry": false,
+      "sourceEncoding": "UTF-8",
+      "interpreter": "plua",
+      "arguments": ["--fibaro", "--run-for", "0", "${relativeFile}"],
+      "listenPublicly": true
+    }
+  ]
 }
-
--- Access devices through variables
-rule("HT.room.device_type.device_name:property => action")
 ```
 
-## Testing Patterns
-- Use `sim.lua` for offline testing
-- Test files in `tests/` directory follow naming: `test*.lua`
-- Use `er.speed()` for accelerated time testing
-- Mock devices with `er.loadSimDevice()`
+Requires the **LuaMobDebug** VS Code extension.
 
-## Error Handling
-- Use `pcall` for potentially failing operations
-- Log errors with appropriate severity levels
-- Provide meaningful error messages with context
-- Handle nil values gracefully in rule expressions
+## QuickApp File Structure
 
-## Performance Considerations
-- Rules are compiled once and cached
-- Use efficient data structures for device lookups
-- Minimize string concatenation in hot paths
-- Cache frequently accessed device properties
+A QuickApp is a single `.lua` file with `--%%` headers at the top:
 
-## Documentation Standards
-- Document complex rule expressions with inline comments
-- Explain non-obvious time calculations
-- Document device property mappings
-- Include usage examples for new features
+```lua
+--%%name:My QuickApp
+--%%type:com.fibaro.binarySwitch
+--%%var:interval=30
+--%%debug:true
+--%%desktop:true
 
-## Integration Points
-- Fibaro HC3 API for device control
-- QuickApp framework for UI and lifecycle
-- Lua 5.3 standard library
-- Custom event system for inter-rule communication
+function QuickApp:onInit()
+    self:debug(self.name, self.id)
+end
 
-## Common Tasks
-When working with EventRunner6, you'll commonly:
-1. Add new device property definitions in `props.lua`
-2. Extend rule syntax in `parser.lua` and `compiler.lua`
-3. Add built-in functions in `builtins.lua`
-4. Create test scenarios in `tests/`
-5. Update documentation in `doc/`
+function QuickApp:turnOn()
+    self:updateProperty("value", true)
+end
 
-## Dependencies and Constraints
-- Runs on Fibaro HC3 Lua environment (Lua 5.3)
-- Limited to HC3 API capabilities
-- Memory constraints typical of embedded systems
-- Real-time execution requirements for automation
+function QuickApp:turnOff()
+    self:updateProperty("value", false)
+end
+```
 
-## File Organization
-- Source files in `src/`
-- Documentation in `doc/`
-- Tests in `tests/`
-- Build scripts in `scripts/`
-- Distribution files generated in `dist/`
+## Uploading to a Real HC3
 
-When suggesting code changes or new features, consider the real-time automation context and ensure compatibility with the Fibaro HC3 platform constraints.
+```bash
+plua --tool uploadQA myQuickApp.lua   # upload as new QA
+plua --tool updateQA myQuickApp.lua   # update existing QA (uses --%%project: header)
+```
+
+Requires HC3 connection configured in plua settings.
+
+---
+
+## QuickApp Development Skills
+
+Skill version: **1.1.0**
+
+Skills for Fibaro HC3 QuickApp development with plua, auto-discovered from `.github/skills/`.
+The instruction file `.github/instructions/quickapp-dev.instructions.md` is auto-applied to all `*.lua` files.
+
+Type a slash command in Copilot chat for detailed reference:
+
+- `/quickapp-api` — full fibaro.*, QuickApp methods, net.HTTPClient, timers
+- `/quickapp-types` — all 40+ device types, UI headers, starter templates
+- `/quickapp-patterns` — timer loops, refreshStates, HTTP, children, state persistence
+- `/hc3-rest-api` — HC3 REST endpoints with examples
+- `/lua-basics` — Lua language reference for non-Lua developers
+- `/plua-troubleshooting` — port conflicts, debugger warnings, common runtime errors
+- `/plua-setup` — install, HC3 credentials, --init-qa, VS Code integration, CLI flags, **`Lua.diagnostics.globals`**
+- `/quickapp-troubleshooting` — HTML in labels, UI callbacks, property persistence, HC3 vs plua differences
+- `/hc3vfs` — editing QA files in the VS Code hc3:// virtual filesystem (requires hc3-vfs extension)
+
+Always read the relevant skill **before** constructing an answer from scratch.

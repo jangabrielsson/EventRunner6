@@ -1,8 +1,8 @@
-local function module(er)
-  print("My rule")
-  er.rule("@sunset => log('Sunset reached!')")
-end
-
-setTimeout(function()
-  fibaro.registerModule("Lighting", -10, module)
-end,0)
+--%%save:foo.fqa
+local a = {c = [[A
+B
+C
+D
+E]]}
+local b = json.encode(a)
+print(b)
