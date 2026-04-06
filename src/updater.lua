@@ -17,7 +17,7 @@
 --%%u:{label='msg', text=''}
 --%% offline:true
 
-local VERSION = "0.0.53"
+local VERSION = "0.0.54"
 local fmt = string.format
 
 local function map(f,t) for k,v in pairs(t) do f(v,k) end end

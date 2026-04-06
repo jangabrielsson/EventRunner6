@@ -1,5 +1,25 @@
 # Changelog
 
+## [v0.0.54] - 2026-04-06
+
+## Changes in v0.0.54
+
+- ✨ **Feature**: add new quickApp device configuration
+- ♻️ **Refactor**: enhance JSON encoding with additional escape sequences
+- 🧪 **Test**: update test script to demonstrate new JSON encoding
+- ✨ **Feature**: add release notes for v0.0.53
+- 🐛 **Fix**: correct version update logic in source files
+- 🐛 **Fix**: resolve table prop reduce bug
+- 🧪 **Test**: add test for new module registration
+- ♻️ **Refactor**: update module registration to use fibaro namespace
+- ♻️ **Refactor**: simplify module loading logic
+- ✨ **Feature**: Fixed typos
+- ✨ **Feature**: Add donation link to README
+  - Added a donation link to support the project.
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.53] - 2025-10-28
 
 ## Changes in v0.0.53
