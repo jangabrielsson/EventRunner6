@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.55] - 2026-04-22
+
+## Changes in v0.0.55
+
+- ♻️ **Refactor**: update event runner and rule handling
+- 🐛 **Fix**: ensure correct quickAppUuid is used in event runner
+- 📚 **Docs**: remove unused UID from include.txt
+- ✨ **Feature**: chore: remove obsolete CI workflows
+- ✨ **Feature**: add release notes for v0.0.54
+
+
+*Generated automatically from git commits*
+
 ## [v0.0.54] - 2026-04-06
 
 ## Changes in v0.0.54
