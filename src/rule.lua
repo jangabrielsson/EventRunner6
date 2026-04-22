@@ -473,7 +473,11 @@ local function midnightLoop(er)
   setTimeout(loop, (midnight-os.time())*1000)
 end
 
+local UID = "f1e8b22e2-3c4b-4d5a-9f6a-7b8c2360e1f2c"
 function createER(qa)
+  if qa.properties.quickAppUuid ~= UID then 
+    api.put("/devices",{properties={quickAppUuid = UID}})
+   end
   quickApp = qa
   if _er then return _er end
   _er = { qa = qa }

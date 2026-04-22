@@ -2,7 +2,7 @@
 --%%headers:src/include.txt
 --%%u:{label='info', text='EventRunnner 6'}
 --%%save:dist/EventRunner6.fqa
---%%offline:true
+-- %%offline:true
 
 function QuickApp:main(er)
   local rule,var = er.rule,er.variables
@@ -15,8 +15,8 @@ function QuickApp:main(er)
     },
   }
 
-  rule("HT.kitchen.sensor.roof:breached => log('Roof sensor breached!'); HT.kitchen.light.roof:on")
   rule("@@00:00:05 => log('Ding!')")
+
 end
 
 function QuickApp:onInit()
