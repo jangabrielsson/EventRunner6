@@ -452,7 +452,8 @@ local function GVAR(name)
   return CONT(function(cont,env)
     local val,err = fibaro.getGlobalVariable(name)
     if val == nil then 
-      fibaro.warning(__TAG,"Global variable not found: "..tostring(name))
+      env.error("Global variable not found: "..tostring(name))
+      --fibaro.warning(__TAG,"Global variable not found: "..tostring(name))
     end
     cont(ER.marshallFrom(val)) 
   end, {'gvar', name}) 

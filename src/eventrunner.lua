@@ -15,7 +15,7 @@ function QuickApp:main(er)
     },
   }
 
-  rule("@@00:00:05 => log('Ding!')")
+  rule("@@00:00:05 == '' => log('Ding!')")
 
 end
 
